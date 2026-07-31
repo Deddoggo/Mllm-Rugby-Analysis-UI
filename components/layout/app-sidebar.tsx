@@ -16,10 +16,12 @@ import {
   PlaySquare,
   Settings,
   Sparkles,
+  Sun,
   Target,
   Users,
   X,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
@@ -57,6 +59,9 @@ const groups: Array<{ label: string; items: NavigationItem[] }> = [
 export function AppSidebar() {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+
+  const toggleTheme = () => setTheme(resolvedTheme === "dark" ? "light" : "dark");
 
   return (
     <>
@@ -98,9 +103,19 @@ export function AppSidebar() {
             </div>
           )}
           <div className="sidebar-tools">
-            <button aria-label="Collapse sidebar" onClick={() => setCollapsed(!collapsed)}><ChevronLeft size={16} /></button>
-            <button aria-label="Toggle theme"><Moon size={16} /></button>
-            <button aria-label="Settings"><Settings size={16} /></button>
+            <button className="sidebar-collapse-control" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed(!collapsed)}>
+              <ChevronLeft size={16} />
+              {!collapsed && <span>Collapse</span>}
+            </button>
+            {!collapsed && (
+              <>
+                <button aria-label="Toggle theme" onClick={toggleTheme}>
+                  <span className="theme-icon theme-icon-moon"><Moon size={16} /></span>
+                  <span className="theme-icon theme-icon-sun"><Sun size={16} /></span>
+                </button>
+                <button aria-label="Settings"><Settings size={16} /></button>
+              </>
+            )}
           </div>
         </div>
       </aside>

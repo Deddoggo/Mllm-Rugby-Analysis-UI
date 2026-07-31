@@ -7,9 +7,11 @@ import {
   Clipboard,
   Database,
   Film,
+  LoaderCircle,
   RefreshCw,
   Sparkles,
 } from "lucide-react";
+import TextareaAutosize from "react-textarea-autosize";
 import { useState } from "react";
 import type { ChatMessage, VideoEvent } from "@/lib/domain";
 import { formatTime } from "@/lib/time";
@@ -76,19 +78,22 @@ export function AnalysisPanel({
         </div>
       )}
 
-      <div className={`composer ${loading ? "is-loading" : ""}`}>
+      <div className={`composer ${loading ? "is-loading" : ""} ${!selected ? "is-disabled" : ""}`} aria-busy={loading}>
         <div className="composer-context">
           <span><Film size={14} /> {selected ? `${selected.label} · ${formatTime(selected.start, true)}–${formatTime(selected.end, true)}` : "No event selected"}</span>
           <span className="context-ready"><Check size={12} /> Context ready</span>
         </div>
-        <textarea
+        <TextareaAutosize
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submit();
           }}
           placeholder="Ask about the selected rugby event…"
-          disabled={!selected}
+          disabled={!selected || loading}
+          minRows={3}
+          maxRows={8}
+          cacheMeasurements
           aria-label="Question about selected rugby event"
         />
         <div className="prompt-row">
@@ -102,7 +107,9 @@ export function AnalysisPanel({
             <button>Concise answer <ChevronDown size={13} /></button>
           </div>
           <span className="mock-label">Mock backend</span>
-          <button className="send-button" onClick={submit} disabled={!selected || !question.trim() || loading} aria-label="Send question"><ArrowUp size={18} /></button>
+          <button className="send-button" onClick={submit} disabled={!selected || !question.trim() || loading} aria-label={loading ? "Analysis in progress" : "Send question"}>
+            {loading ? <LoaderCircle className="send-spinner" size={17} /> : <ArrowUp size={18} />}
+          </button>
         </div>
       </div>
     </section>
