@@ -1,0 +1,6 @@
+[
+  { "id": "event_001", "label": "Scrum", "start": 42.0, "end": 55.0, "confidence": 0.92 },
+  { "id": "event_002", "label": "Lineout", "start": 96.0, "end": 110.0, "confidence": 0.87 },
+  { "id": "event_003", "label": "Maul", "start": 151.0, "end": 167.0, "confidence": 0.84 },
+  { "id": "event_004", "label": "Goal Kick", "start": 220.0, "end": 235.0, "confidence": 0.95 }
+]
