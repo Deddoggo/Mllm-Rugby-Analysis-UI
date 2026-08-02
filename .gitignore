@@ -1,8 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
-/.pnp
+**/node_modules/
+**/.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -11,12 +11,12 @@
 !.yarn/versions
 
 # testing
-/coverage
+**/coverage/
 
-# next.js
-/.next/
-/.vinext/
-/out/
+# Next.js / vinext
+**/.next/
+**/.vinext/
+**/out/
 
 # misc
 .DS_Store
@@ -30,16 +30,33 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!**/.env.example
 
-# vercel
-.vercel
+# hosting and build tools
+**/.vercel/
+**/.wrangler/
+**/dist/
+**/outputs/
+**/work/
+**/.pnpm-store/
 
-# typescript
-next-env.d.ts
-/dist/
-/.wrangler/
-/outputs/
-/work/
-/.pnpm-store/
-/.devserver*.log
+# TypeScript and local development
+**/next-env.d.ts
+.devserver*.log
 *.tsbuildinfo
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.venv/
+**/venv/
+
+# Local data (retain directory placeholders only)
+data/videos/*
+data/clips/*
+data/events/*
+!data/videos/.gitkeep
+!data/clips/.gitkeep
+!data/events/.gitkeep

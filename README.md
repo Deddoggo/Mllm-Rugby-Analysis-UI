@@ -1,93 +1,85 @@
-# Rugby Intelligence
+# Multimodal Large Language Models for Behavioral Analysis in Sports Videos
 
-Rugby Intelligence is a production-oriented frontend foundation for multimodal behavioral analysis of rugby broadcasts. It presents precomputed V-JEPA2-style event proposals on an editable timeline, lets analysts refine clip boundaries, and provides an event-scoped conversation for future Gemma or Qwen-VL analysis.
-
-## Design
-
-The interface reinterprets the supplied reference as professional research software: a light navigation shell, compact status bar, centered video focus, integrated timeline, large contextual AI composer, and quiet event cards. Rugby green anchors actions and selection; amber is reserved for temporal handles and uncertainty.
+This repository is the monorepo foundation for **Rugby Intelligence**, an internship project exploring multimodal behavioral analysis of rugby video. The existing Next.js frontend remains the working prototype. The backend and AI service directories define clean integration boundaries for future work and intentionally contain no business or inference logic yet.
 
 ## Architecture
 
-- Next.js App Router, React, TypeScript, Tailwind CSS
-- TanStack Query for repository loading
-- Zustand for workspace, adjusted events, selection, and per-event chat
-- Zod for all external event and analysis payloads
-- Interface-driven video, event, and analysis services
-- Native HTML video and pointer-driven DOM timeline
-- Vitest for domain, boundary, store, and factory tests
+```text
+Frontend (Next.js)
+        |
+        v
+Backend API (FastAPI)
+        |
+        v
+AI Service
+  |-- V-JEPA2 event proposals
+  |-- Gemma/Qwen multimodal analysis
+  |-- Rugby RAG
+  `-- Player and pitch tracking
+```
 
-Visual components do not fetch or contain backend logic. `services/factory.ts` selects mock or API implementations through environment configuration.
+### Frontend
 
-## Setup
+The `frontend/` application owns:
+
+- the video analysis workspace;
+- event timeline and boundary editing;
+- event selection and client-side workspace state;
+- the event-scoped chat interface;
+- mock and future HTTP service implementations.
+
+The current prototype runs entirely through the frontend's mock data mode. Its service contracts are the future connection point to the backend.
+
+### Backend
+
+The `backend/` directory is a minimal FastAPI service skeleton reserved for:
+
+- API orchestration;
+- video upload and processing requests;
+- event and clip request management;
+- forwarding analysis work to AI services.
+
+No API routes, persistence, or processing logic are implemented yet.
+
+### AI service
+
+The `ai-service/` directory separates future model responsibilities into V-JEPA2, VLM, RAG, and tracking modules. It contains documentation and placeholders only; it does not load or run models.
+
+### Data
+
+The `data/` directory provides filesystem locations for uploaded videos, extracted clips, and generated event documents. The contents are ignored by Git so large or generated runtime data is not committed.
+
+## Repository structure
+
+```text
+frontend/      Working Next.js/React/TypeScript application
+backend/       Future FastAPI orchestration service
+ai-service/    Future inference and retrieval modules
+data/          Local runtime video, clip, and event storage
+```
+
+## Run the frontend
 
 ```bash
+cd frontend
 pnpm install
 pnpm dev
-pnpm test
+```
+
+Validation commands:
+
+```bash
 pnpm lint
+pnpm test
 pnpm build
 ```
 
-Copy `.env.example` to `.env.local` if you want to change defaults.
+See `frontend/README.md` for the current prototype workflow, mock mode, and prepared API contracts.
 
-## Demo mode
+## Current scope
 
-The precomputed proposals live at `public/demo/events.json`. Add your own local broadcast clip as:
-
-```text
-public/demo/match.mp4
-```
-
-The application deliberately does not include a large video. Without it, the polished placeholder, events, boundary editing, and mock analysis remain usable.
-
-```env
-NEXT_PUBLIC_DATA_MODE=mock
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_ENABLE_MOCK_ERRORS=false
-```
-
-Mock analysis waits briefly, responds according to the selected event label, identifies itself as `mock-rugby-vlm`, and explicitly notes that visual inference is simulated.
-
-## API mode
-
-Set `NEXT_PUBLIC_DATA_MODE=api`. The visual application remains unchanged; the factory selects the API repositories. Prepared contracts expect:
-
-```http
-POST /api/v1/videos
-POST /api/v1/videos/{videoId}/events/detect
-GET /api/v1/videos/{videoId}/events
-POST /api/v1/analysis
-```
-
-Zod validates all external event and analysis responses.
-
-## Domain model
-
-The core types are `VideoAsset`, `VideoEvent`, `AnalysisRequest`, `AnalysisResponse`, and `ChatMessage`. Detected timestamps remain immutable in `detectedStart` and `detectedEnd`; adjusted `start` and `end` values are committed only when pointer interaction finishes.
-
-## Project shape
-
-```text
-app/            route, providers, theme
-components/     layout, video, timeline, event, and analysis UI
-lib/            domain schemas and time/boundary utilities
-services/       contracts, mock services, API skeletons, factory
-stores/         event selection, editing, and per-event chat
-public/demo/    precomputed event proposals
-tests/          domain and workspace behavior
-```
-
-## Future integration
-
-1. Upload a full match and persist a `VideoAsset`.
-2. Run V-JEPA2 event detection and return validated proposals.
-3. Use FFmpeg server-side to extract the analyst-adjusted interval.
-4. Send the clip, metadata, and question to Gemma or Qwen-VL.
-5. Stream the structured response into the event-scoped analysis record.
-
-## Known limitations
-
-- Video upload and persistence are intentionally not implemented.
-- The bundled demo contains event metadata but no match video.
-- Mock answers do not inspect pixels and must not be treated as tactical evidence.
-- Backend, V-JEPA2, FFmpeg, and VLM availability indicators are demonstrative.
+- Frontend prototype: implemented and working.
+- Backend: structure and entry point only.
+- AI service: documented module boundaries only.
+- Database and production file storage: not implemented.
+- Model inference and video processing: not implemented.
