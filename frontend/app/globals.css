@@ -319,7 +319,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .mobile-menu, .sidebar-backdrop { display: none; }
 
 .dark body { background: #0b100d; color: var(--foreground); }
-.dark .sidebar,
 .dark .app-main,
 .dark .topbar,
 .dark .timeline-panel,
