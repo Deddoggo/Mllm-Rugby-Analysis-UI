@@ -46,7 +46,12 @@ The application deliberately does not include a large video. Without it, the pol
 NEXT_PUBLIC_DATA_MODE=mock
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_ENABLE_MOCK_ERRORS=false
+NEXT_PUBLIC_MEDIA_DEBUG=false
 ```
+
+Set `NEXT_PUBLIC_MEDIA_DEBUG=true` only while diagnosing playback. It enables
+concise media lifecycle, source, pause, and programmatic-seek diagnostics in
+development builds.
 
 Mock analysis waits briefly, responds according to the selected event label, identifies itself as `mock-rugby-vlm`, and explicitly notes that visual inference is simulated.
 

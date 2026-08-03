@@ -2,48 +2,134 @@
 
 import { Eye, Plus, RotateCcw, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnalysisRequest, ChatMessage } from "@/lib/domain";
-import { formatTime } from "@/lib/time";
+import { formatTime, normalizeEventBoundaries } from "@/lib/time";
+import {
+  getBoundaryPersistenceErrorMessage,
+  persistEventBoundaries,
+} from "@/lib/event-boundary-persistence";
+import { detectEvents, updateEventBoundaries } from "@/services/api";
 import { services } from "@/services/factory";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { AppShell } from "@/components/layout/app-shell";
 import { VideoPanel } from "@/components/video/video-panel";
+import type { VideoPanelHandle } from "@/components/video/video-panel";
 import { VideoUpload } from "@/components/video/video-upload";
 import { EventTimeline } from "@/components/timeline/event-timeline";
 import { AnalysisPanel } from "./analysis-panel";
 import { EventGrid } from "@/components/events/event-grid";
 
 export function AnalysisWorkspace() {
+  const videoPanelRef = useRef<VideoPanelHandle>(null);
   const events = useWorkspaceStore((state) => state.events);
   const currentVideo = useWorkspaceStore((state) => state.currentVideo);
   const selectedId = useWorkspaceStore((state) => state.selectedId);
   const chats = useWorkspaceStore((state) => state.chats);
+  const eventDetectionStatus = useWorkspaceStore((state) => state.eventDetectionStatus);
+  const eventDetectionError = useWorkspaceStore((state) => state.eventDetectionError);
   const setEvents = useWorkspaceStore((state) => state.setEvents);
   const selectEvent = useWorkspaceStore((state) => state.selectEvent);
   const updateBounds = useWorkspaceStore((state) => state.updateBounds);
+  const replaceEvent = useWorkspaceStore((state) => state.replaceEvent);
   const resetBounds = useWorkspaceStore((state) => state.resetBounds);
   const addMessages = useWorkspaceStore((state) => state.addMessages);
+  const detectEventsForVideo = useWorkspaceStore((state) => state.detectEventsForVideo);
   const [search, setSearch] = useState("");
   const [current, setCurrent] = useState(0);
+  const [observedDuration, setObservedDuration] = useState({ sourceId: "demo", value: 300 });
   const [previewSignal, setPreviewSignal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState("");
+  const [boundaryError, setBoundaryError] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ["events", "demo-toulouse-asm"],
     queryFn: () => services.events.getEvents("demo-toulouse-asm"),
+    enabled: currentVideo === null,
   });
 
   useEffect(() => {
-    if (query.data) setEvents(query.data);
-  }, [query.data, setEvents]);
+    if (!currentVideo && query.data) setEvents(query.data);
+  }, [currentVideo, query.data, setEvents]);
 
   const selected = events.find((event) => event.id === selectedId);
   const visibleEvents = useMemo(
     () => events.filter((event) => event.label.toLowerCase().includes(search.toLowerCase())),
     [events, search],
   );
+
+  const sourceId = currentVideo?.id ?? "demo";
+  const playbackDuration = observedDuration.sourceId === sourceId
+    ? observedDuration.value
+    : currentVideo?.duration ?? 300;
+
+  const observeDuration = useCallback((duration: number) => {
+    setObservedDuration({ sourceId, value: duration });
+  }, [sourceId]);
+
+  const seekTo = useCallback((seconds: number) => {
+    videoPanelRef.current?.seekTo(seconds);
+  }, []);
+
+  const selectAndSeek = useCallback((id: string) => {
+    const event = useWorkspaceStore.getState().events.find((item) => item.id === id);
+    if (!event) return;
+    selectEvent(id);
+    seekTo(event.start);
+  }, [seekTo, selectEvent]);
+
+  const runDetection = useCallback(async (force = false) => {
+    if (!currentVideo) return;
+    try {
+      await detectEventsForVideo(
+        currentVideo.id,
+        (videoId) => detectEvents(videoId, { force }),
+      );
+    } catch {
+      // The store retains a visible, retryable detection error.
+    }
+  }, [currentVideo, detectEventsForVideo]);
+
+  const commitBounds = useCallback(async (id: string, start: number, end: number) => {
+    const original = useWorkspaceStore.getState().events.find((event) => event.id === id);
+    if (!original) return;
+    setBoundaryError(null);
+    const normalized = normalizeEventBoundaries({
+      kind: "normalize",
+      start,
+      end,
+      videoDuration: playbackDuration,
+    });
+    if (!currentVideo) {
+      updateBounds(id, normalized.start, normalized.end);
+      return;
+    }
+    try {
+      await persistEventBoundaries({
+        original,
+        start: normalized.start,
+        end: normalized.end,
+        videoDuration: playbackDuration,
+        updateLocal: updateBounds,
+        replaceLocal: replaceEvent,
+        persist: (eventId, nextStart, nextEnd) =>
+          updateEventBoundaries(currentVideo.id, eventId, nextStart, nextEnd),
+      });
+    } catch (caught) {
+      setBoundaryError(getBoundaryPersistenceErrorMessage(caught));
+    }
+  }, [currentVideo, playbackDuration, replaceEvent, updateBounds]);
+
+  const resetEventBounds = useCallback((id: string) => {
+    const event = useWorkspaceStore.getState().events.find((item) => item.id === id);
+    if (!event) return;
+    if (currentVideo) {
+      void commitBounds(id, event.detectedStart, event.detectedEnd);
+    } else {
+      resetBounds(id);
+    }
+  }, [commitBounds, currentVideo, resetBounds]);
 
   const ask = useCallback(async (question: string) => {
     if (!selected) return;
@@ -58,7 +144,7 @@ export function AnalysisWorkspace() {
     };
     addMessages(selected.id, [userMessage]);
     const request: AnalysisRequest = {
-      videoId: "demo-toulouse-asm",
+      videoId: currentVideo?.id ?? "demo-toulouse-asm",
       eventId: selected.id,
       start: selected.start,
       end: selected.end,
@@ -80,7 +166,7 @@ export function AnalysisWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [selected, addMessages]);
+  }, [selected, addMessages, currentVideo]);
 
   return (
     <AppShell search={search} onSearch={setSearch}>
@@ -98,10 +184,27 @@ export function AnalysisWorkspace() {
       {!currentVideo && query.isLoading && <div className="state-card"><span className="spinner" /> Preparing event intelligence…</div>}
       {!currentVideo && query.isError && <div className="state-card error">Event data is invalid or unavailable. <button onClick={() => query.refetch()}>Retry</button></div>}
       {!currentVideo && !query.isLoading && !query.isError && events.length === 0 && <div className="state-card">No event proposals were found for this match.</div>}
+      {currentVideo && eventDetectionStatus === "detecting" && <div className="state-card"><span className="spinner" /> Detecting rugby event proposals...</div>}
+      {currentVideo && eventDetectionStatus === "error" && (
+        <div className="state-card error">
+          {eventDetectionError ?? "Event detection failed."}
+          <button onClick={() => void runDetection(true)}>Retry</button>
+        </div>
+      )}
+      {currentVideo && eventDetectionStatus === "ready" && events.length === 0 && <div className="state-card">No event proposals were found for this match.</div>}
 
       {(currentVideo || events.length > 0) && (
         <div className="video-wrap">
-          <VideoPanel key={currentVideo?.id ?? "demo"} current={current} onTime={setCurrent} selected={selected} previewSignal={previewSignal} video={currentVideo} />
+          <VideoPanel
+            ref={videoPanelRef}
+            current={current}
+            onTime={setCurrent}
+            onDuration={observeDuration}
+            selected={selected}
+            previewSignal={previewSignal}
+            video={currentVideo}
+            detectionStatus={eventDetectionStatus}
+          />
         </div>
       )}
 
@@ -111,15 +214,13 @@ export function AnalysisWorkspace() {
             events={visibleEvents}
             selectedId={selectedId}
             current={current}
-            onSelect={(id) => {
-              selectEvent(id);
-              const item = events.find((event) => event.id === id);
-              if (item) setCurrent(item.start);
-            }}
-            onSeek={setCurrent}
-            onBounds={updateBounds}
-            onReset={resetBounds}
+            duration={playbackDuration}
+            onSelect={selectAndSeek}
+            onSeek={seekTo}
+            onBounds={(id, start, end) => void commitBounds(id, start, end)}
+            onReset={resetEventBounds}
           />
+          {boundaryError && <div className="boundary-error" role="status">{boundaryError}</div>}
           {selected ? (
             <div className="selected-summary">
               <span className="selected-label">{selected.label}</span>
@@ -130,7 +231,7 @@ export function AnalysisWorkspace() {
               <strong>{formatTime(selected.start, true)} → {formatTime(selected.end, true)}</strong>
               <span>{(selected.end - selected.start).toFixed(1)}s adjusted</span>
               <div className="summary-actions">
-                <button onClick={() => resetBounds(selected.id)}><RotateCcw size={13} /> Reset</button>
+                <button onClick={() => resetEventBounds(selected.id)}><RotateCcw size={13} /> Reset</button>
                 <button><SlidersHorizontal size={13} /> Edit details</button>
                 <button className="preview-button" onClick={() => setPreviewSignal((value) => value + 1)}><Eye size={13} /> Preview clip</button>
               </div>
@@ -144,7 +245,7 @@ export function AnalysisWorkspace() {
             onSubmit={ask}
             onRetry={() => lastQuestion && ask(lastQuestion)}
           />
-          <EventGrid events={visibleEvents} selectedId={selectedId} onSelect={selectEvent} />
+          <EventGrid events={visibleEvents} selectedId={selectedId} onSelect={selectAndSeek} />
         </>
       )}
     </AppShell>
