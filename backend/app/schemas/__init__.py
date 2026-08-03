@@ -1,1 +1,1 @@
-"""Future API request and response schemas."""
+"""API request, response, and persistence schemas."""

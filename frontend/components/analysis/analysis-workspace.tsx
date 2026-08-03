@@ -9,12 +9,14 @@ import { services } from "@/services/factory";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { AppShell } from "@/components/layout/app-shell";
 import { VideoPanel } from "@/components/video/video-panel";
+import { VideoUpload } from "@/components/video/video-upload";
 import { EventTimeline } from "@/components/timeline/event-timeline";
 import { AnalysisPanel } from "./analysis-panel";
 import { EventGrid } from "@/components/events/event-grid";
 
 export function AnalysisWorkspace() {
   const events = useWorkspaceStore((state) => state.events);
+  const currentVideo = useWorkspaceStore((state) => state.currentVideo);
   const selectedId = useWorkspaceStore((state) => state.selectedId);
   const chats = useWorkspaceStore((state) => state.chats);
   const setEvents = useWorkspaceStore((state) => state.setEvents);
@@ -91,15 +93,20 @@ export function AnalysisWorkspace() {
         <button className="primary-action" onClick={() => window.location.reload()}><Plus size={17} /> New Analysis</button>
       </div>
 
-      {query.isLoading && <div className="state-card"><span className="spinner" /> Preparing event intelligence…</div>}
-      {query.isError && <div className="state-card error">Event data is invalid or unavailable. <button onClick={() => query.refetch()}>Retry</button></div>}
-      {!query.isLoading && !query.isError && events.length === 0 && <div className="state-card">No event proposals were found for this match.</div>}
+      <VideoUpload />
+
+      {!currentVideo && query.isLoading && <div className="state-card"><span className="spinner" /> Preparing event intelligence…</div>}
+      {!currentVideo && query.isError && <div className="state-card error">Event data is invalid or unavailable. <button onClick={() => query.refetch()}>Retry</button></div>}
+      {!currentVideo && !query.isLoading && !query.isError && events.length === 0 && <div className="state-card">No event proposals were found for this match.</div>}
+
+      {(currentVideo || events.length > 0) && (
+        <div className="video-wrap">
+          <VideoPanel key={currentVideo?.id ?? "demo"} current={current} onTime={setCurrent} selected={selected} previewSignal={previewSignal} video={currentVideo} />
+        </div>
+      )}
 
       {events.length > 0 && (
         <>
-          <div className="video-wrap">
-            <VideoPanel current={current} onTime={setCurrent} selected={selected} previewSignal={previewSignal} />
-          </div>
           <EventTimeline
             events={visibleEvents}
             selectedId={selectedId}

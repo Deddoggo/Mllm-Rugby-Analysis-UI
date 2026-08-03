@@ -141,6 +141,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .workspace-header p { margin: 0; color: var(--muted); font-size: 12px; }
 .primary-action { display: flex; align-items: center; gap: 8px; border: 0; background: var(--primary); color: #fff; height: 38px; padding: 0 17px; border-radius: 11px; font-size: 11px; font-weight: 700; cursor: pointer; }
 .primary-action:hover { background: var(--primary-hover); }
+.upload-card { margin-bottom: 18px; border: 1px solid var(--border); border-radius: 16px; padding: 10px; background: linear-gradient(135deg, var(--primary-soft), var(--surface) 58%); transition: border-color .18s ease, background-color .18s ease; }
+.upload-card.dragging { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
+.upload-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.upload-dropzone { width: 100%; min-height: 72px; display: flex; align-items: center; gap: 13px; padding: 12px 14px; border: 1px dashed color-mix(in srgb, var(--primary) 32%, var(--border)); border-radius: 12px; text-align: left; background: color-mix(in srgb, var(--surface) 82%, transparent); cursor: pointer; }
+.upload-dropzone:disabled { cursor: wait; opacity: .72; }
+.upload-icon { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 11px; color: var(--primary); background: var(--primary-soft); }
+.upload-dropzone strong, .upload-dropzone small { display: block; }
+.upload-dropzone strong { font-size: 12px; }
+.upload-dropzone small { margin-top: 4px; color: var(--muted); font-size: 9px; }
+.upload-result { margin-top: 9px; min-height: 52px; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 11px; font-size: 10px; }
+.upload-result.success { color: var(--primary); border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border)); background: color-mix(in srgb, var(--primary-soft) 72%, var(--surface)); }
+.upload-result.success > div { min-width: 0; }
+.upload-result strong, .upload-result span { display: block; }
+.upload-result span { margin-top: 4px; display: flex; align-items: center; gap: 5px; color: var(--muted); overflow-wrap: anywhere; }
+.upload-result dl { margin: 0 0 0 auto; display: flex; gap: 20px; }
+.upload-result dl div { min-width: 62px; }
+.upload-result dt { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.upload-result dd { margin: 3px 0 0; color: var(--foreground); font-weight: 700; }
+.upload-result.error { color: #8a3d36; border: 1px solid #f0cbc6; background: #fff2ef; }
 .state-card { min-height: 140px; display: flex; align-items: center; justify-content: center; gap: 10px; background: #fbfcfa; border: 1px solid var(--border); border-radius: 15px; color: var(--muted); }
 .state-card button { border: 0; color: var(--primary); font-weight: 700; background: transparent; }
 .spinner { width: 16px; height: 16px; border: 2px solid #dce8df; border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
@@ -328,6 +347,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .dark .timeline-legend,
 .dark .confidence { color: #91a097; }
 .dark .state-card { color: #a8b4ac; background: #141c17; border-color: #2a372e; }
+.dark .upload-card { background: linear-gradient(135deg, #17291f, var(--surface) 58%); }
+.dark .upload-dropzone { color: var(--foreground); background: rgba(17, 24, 20, .72); }
+.dark .upload-result.error { color: #f0aca5; border-color: #5a2d29; background: #351d1b; }
 .dark .video-card { background: #0e1511; border-color: #2b3930; box-shadow: 0 16px 42px rgba(0,0,0,.3); }
 .dark .match-strip,
 .dark .video-footer { background: #121a15; border-color: #29362e; }
@@ -408,6 +430,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .topbar { padding-right: 10px; }.breadcrumb { display: none; }
   .top-actions { margin-left: auto; }
   .workspace-header { align-items: flex-end; }.workspace-header p { display: none; }
+  .upload-result.success { align-items: flex-start; flex-wrap: wrap; }.upload-result dl { width: 100%; margin-left: 30px; }
   .primary-action { width: 38px; padding: 0; justify-content: center; }.primary-action { font-size: 0; }
   .match-strip { grid-template-columns: 1fr 1fr; }.match-strip > div:first-child { display: none; }.match-strip > strong { font-size: 9px; }
   .video-stage { height: 250px; }.video-missing p { max-width: 230px; }.video-missing strong { max-width: 260px; }

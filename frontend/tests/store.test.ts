@@ -13,7 +13,7 @@ const event: VideoEvent = {
 };
 
 describe("workspace store", () => {
-  beforeEach(() => useWorkspaceStore.setState({ events: [], selectedId: null, chats: {} }));
+  beforeEach(() => useWorkspaceStore.setState({ currentVideo: null, events: [], selectedId: null, chats: {} }));
 
   it("selects, adjusts, and resets event boundaries", () => {
     useWorkspaceStore.getState().setEvents([event]);
@@ -31,5 +31,20 @@ describe("workspace store", () => {
       createdAt: "2026-07-31T08:00:00.000Z",
     }]);
     expect(useWorkspaceStore.getState().chats[event.id]).toHaveLength(1);
+  });
+
+  it("makes an uploaded video current and clears demo event context", () => {
+    useWorkspaceStore.getState().setEvents([event]);
+    useWorkspaceStore.getState().setCurrentVideo({
+      id: "match_20260803_abcd1234",
+      name: "uploaded-match.mp4",
+      url: "http://localhost:8000/videos/match_20260803_abcd1234/stream",
+      duration: 2400,
+      size: 1024,
+    });
+
+    expect(useWorkspaceStore.getState().currentVideo?.name).toBe("uploaded-match.mp4");
+    expect(useWorkspaceStore.getState().events).toEqual([]);
+    expect(useWorkspaceStore.getState().selectedId).toBeNull();
   });
 });

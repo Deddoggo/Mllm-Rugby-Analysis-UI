@@ -1,11 +1,13 @@
 import { create } from "zustand";
-import type { ChatMessage, VideoEvent } from "@/lib/domain";
+import type { ChatMessage, VideoAsset, VideoEvent } from "@/lib/domain";
 
 interface WorkspaceState {
   events: VideoEvent[];
+  currentVideo: VideoAsset | null;
   selectedId: string | null;
   chats: Record<string, ChatMessage[]>;
   setEvents: (events: VideoEvent[]) => void;
+  setCurrentVideo: (video: VideoAsset) => void;
   selectEvent: (id: string) => void;
   updateBounds: (id: string, start: number, end: number) => void;
   resetBounds: (id: string) => void;
@@ -15,10 +17,13 @@ interface WorkspaceState {
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   events: [],
+  currentVideo: null,
   selectedId: null,
   chats: {},
   setEvents: (events) =>
     set({ events, selectedId: events[0]?.id ?? null, chats: {} }),
+  setCurrentVideo: (currentVideo) =>
+    set({ currentVideo, events: [], selectedId: null, chats: {} }),
   selectEvent: (selectedId) => set({ selectedId }),
   updateBounds: (id, start, end) =>
     set((state) => ({
@@ -38,5 +43,5 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     set((state) => ({
       chats: { ...state.chats, [id]: [...(state.chats[id] ?? []), ...messages] },
     })),
-  reset: () => set({ selectedId: null, events: [], chats: {} }),
+  reset: () => set({ currentVideo: null, selectedId: null, events: [], chats: {} }),
 }));

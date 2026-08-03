@@ -11,7 +11,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { VideoEvent } from "@/lib/domain";
+import type { VideoAsset, VideoEvent } from "@/lib/domain";
 import { formatTime } from "@/lib/time";
 
 export function VideoPanel({
@@ -19,11 +19,13 @@ export function VideoPanel({
   onTime,
   selected,
   previewSignal,
+  video,
 }: {
   current: number;
   onTime: (time: number) => void;
   selected?: VideoEvent;
   previewSignal: number;
+  video?: VideoAsset | null;
 }) {
   const playerRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -32,6 +34,8 @@ export function VideoPanel({
   const [missing, setMissing] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
+  const [duration, setDuration] = useState(video?.duration ?? 300);
+  const source = video?.url ?? "/demo/match.mp4";
 
   const toggle = async () => {
     const video = videoRef.current;
@@ -55,13 +59,13 @@ export function VideoPanel({
       if (!video) return;
       if (event.code === "Space") { event.preventDefault(); void toggle(); }
       if (event.key === "ArrowLeft") video.currentTime = Math.max(0, video.currentTime - 5);
-      if (event.key === "ArrowRight") video.currentTime = Math.min(300, video.currentTime + 5);
+      if (event.key === "ArrowRight") video.currentTime = Math.min(duration, video.currentTime + 5);
       if (event.key.toLowerCase() === "j") video.currentTime = Math.max(0, video.currentTime - 10);
-      if (event.key.toLowerCase() === "l") video.currentTime = Math.min(300, video.currentTime + 10);
+      if (event.key.toLowerCase() === "l") video.currentTime = Math.min(duration, video.currentTime + 10);
     };
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  });
+  }, [duration]);
 
   useEffect(() => {
     const handleFullscreen = () => setFullscreen(document.fullscreenElement === playerRef.current);
@@ -75,18 +79,24 @@ export function VideoPanel({
   };
 
   return (
-    <section ref={playerRef} className="video-card" aria-label="Demo match video">
+    <section ref={playerRef} className="video-card" aria-label={video ? `Uploaded match video: ${video.name}` : "Demo match video"}>
       <div className="match-strip">
-        <div><span className="live-dot" /> Demo match</div>
-        <strong>Stade Toulousain <b>17</b> <span>—</span> <b>10</b> ASM Clermont</strong>
-        <div><span>First half</span><strong>05:00</strong></div>
+        <div><span className="live-dot" /> {video ? "Uploaded match" : "Demo match"}</div>
+        {video
+          ? <strong>{video.name}</strong>
+          : <strong>Stade Toulousain <b>17</b> <span>—</span> <b>10</b> ASM Clermont</strong>}
+        <div><span>{video ? "Ready to review" : "First half"}</span><strong>{formatTime(duration)}</strong></div>
       </div>
       <div className="video-stage">
         <video
           ref={videoRef}
-          src="/demo/match.mp4"
+          src={source}
           muted={muted}
+          onLoadStart={() => onTime(0)}
           onError={() => setMissing(true)}
+          onLoadedMetadata={(event) => {
+            if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration);
+          }}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onTimeUpdate={(event) => {
@@ -94,7 +104,7 @@ export function VideoPanel({
             onTime(next);
             if (selected && next >= selected.end) event.currentTarget.pause();
           }}
-          aria-label="Toulouse versus ASM demo match"
+          aria-label={video ? `Uploaded video ${video.name}` : "Toulouse versus ASM demo match"}
         />
         <div className="pitch-visual" aria-hidden="true">
           <div className="pitch-midline" />
@@ -105,9 +115,9 @@ export function VideoPanel({
         </div>
         {missing && (
           <div className="video-missing">
-            <span className="missing-kicker">Demo video placeholder</span>
-            <strong>Add match.mp4 to begin video review</strong>
-            <p>Event detection data and all timeline tools remain available.</p>
+            <span className="missing-kicker">{video ? "Video unavailable" : "Demo video placeholder"}</span>
+            <strong>{video ? "The uploaded match could not be loaded" : "Add match.mp4 to begin video review"}</strong>
+            <p>{video ? "Check that the backend is running and try the upload again." : "Event detection data and all timeline tools remain available."}</p>
           </div>
         )}
         {selected && (
@@ -123,9 +133,9 @@ export function VideoPanel({
             className="video-progress"
             type="range"
             min={0}
-            max={300}
+            max={duration || 0}
             step={0.1}
-            value={Math.min(current, 300)}
+            value={Math.min(current, duration || 0)}
             onChange={(event) => {
               const next = Number(event.target.value);
               if (videoRef.current) videoRef.current.currentTime = next;
@@ -135,7 +145,7 @@ export function VideoPanel({
           />
           <div className="video-control-row">
             <button onClick={toggle} aria-label={playing ? "Pause" : "Play"}>{playing ? <Pause size={18} /> : <Play size={18} />}</button>
-            <span>{formatTime(current)} / 05:00</span>
+            <span>{formatTime(current)} / {formatTime(duration)}</span>
             <div className="control-spacer" />
             <button onClick={() => setMuted(!muted)} aria-label={muted ? "Unmute" : "Mute"}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
             <button onClick={() => {
@@ -150,7 +160,7 @@ export function VideoPanel({
         </div>
       </div>
       <div className="video-footer">
-        <span>Broadcast feed · 1080p</span>
+        <span>{video ? "Uploaded source · backend stream" : "Broadcast feed · 1080p"}</span>
         <button onClick={() => { if (videoRef.current) videoRef.current.currentTime = 0; onTime(0); }}><RotateCcw size={13} /> Restart</button>
       </div>
     </section>

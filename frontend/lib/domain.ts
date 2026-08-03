@@ -14,7 +14,8 @@ export interface VideoAsset {
   id: string;
   name: string;
   url: string;
-  duration: number;
+  duration: number | null;
+  size?: number;
 }
 
 export interface VideoEvent {

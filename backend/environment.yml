@@ -1,0 +1,13 @@
+name: rugby-backend
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.11
+  - ffmpeg
+  - pip
+  - pip:
+      - fastapi
+      - uvicorn
+      - python-multipart
