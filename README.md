@@ -1,6 +1,6 @@
 # Multimodal Large Language Models for Behavioral Analysis in Sports Videos
 
-This repository is the monorepo foundation for **Rugby Intelligence**, an internship project exploring multimodal behavioral analysis of rugby video. The existing Next.js frontend remains the working prototype. The backend and AI service directories define clean integration boundaries for future work and intentionally contain no business or inference logic yet.
+This repository is the monorepo foundation for **Rugby Intelligence**, an internship project exploring multimodal behavioral analysis of rugby video. The Next.js workspace and FastAPI video/event foundation are functional; model inference remains behind explicit service boundaries.
 
 ## Architecture
 
@@ -28,7 +28,9 @@ The `frontend/` application owns:
 - the event-scoped chat interface;
 - mock and future HTTP service implementations.
 
-The current prototype runs entirely through the frontend's mock data mode. Its service contracts are the future connection point to the backend.
+Demo analysis remains available through frontend mock services. Real uploads use
+the backend upload, streaming, and event APIs while retaining the current mock
+chat implementation.
 
 ### Backend
 
@@ -36,13 +38,17 @@ The `backend/` directory contains the first functional FastAPI milestone:
 
 - a health endpoint;
 - multipart video upload validation;
-- local video storage, browser playback, and basic metadata extraction.
+- local video storage, browser playback, and basic metadata extraction;
+- JSON event persistence, detection APIs, and boundary updates.
 
-Database persistence, event detection, and AI processing are not implemented yet.
+Event proposals currently come from a deterministic mock detector. Database
+persistence and real AI processing are not implemented yet.
 
 ### AI service
 
-The `ai-service/` directory separates future model responsibilities into V-JEPA2, VLM, RAG, and tracking modules. It contains documentation and placeholders only; it does not load or run models.
+The `ai-service/` directory separates V-JEPA2, VLM, RAG, and tracking modules.
+Its `vjepa2/` package now contains the detector contract and temporary mock; it
+does not load PyTorch or a model checkpoint.
 
 ### Data
 
@@ -55,7 +61,7 @@ contents are ignored by Git so large or generated runtime data is not committed.
 ```text
 frontend/      Working Next.js/React/TypeScript application
 backend/       FastAPI upload, preprocessing, and streaming service
-ai-service/    Future inference and retrieval modules
+ai-service/    Detector contract plus future inference and retrieval modules
 data/          Local original, processed, clip, event, and metadata storage
 ```
 
@@ -87,7 +93,25 @@ See `frontend/README.md` for the current prototype workflow, mock mode, and prep
 
 - Frontend prototype: implemented and working.
 - Backend: video upload pipeline implemented.
-- AI service: documented module boundaries only.
+- Event Data Layer: real API and JSON contracts with mocked proposals.
+- AI service: detector abstraction implemented; real inference unavailable.
 - Database and production file storage: not implemented.
 - Model inference: not implemented.
-- Video preprocessing: implemented; event detection and model processing remain future work.
+- Video preprocessing: implemented.
+- Event proposals: deterministic mock only; real V-JEPA2 and VLM processing remain future work.
+
+## Uploaded-video event flow
+
+```text
+Upload and preprocess video
+  -> POST /videos/{video_id}/events/detect
+  -> mock EventDetector proposal generation
+  -> data/events/{video_id}.json
+  -> frontend timeline, boundary editing, and mock chat context
+```
+
+The Event Data Layer and API contract are production-shaped, but proposal
+semantics are not real inference. The future
+`ai-service/vjepa2/real_detector.py` adapter will load
+`rugby_linear_head_5_classes` and implement the existing `EventDetector`
+contract without changing routes, persistence, or frontend components.

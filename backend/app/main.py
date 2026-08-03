@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.events import router as events_router
 from app.api.videos import router as videos_router
 
 
@@ -26,6 +27,7 @@ app.add_middleware(
 )
 
 app.include_router(videos_router)
+app.include_router(events_router)
 
 
 @app.get("/health")

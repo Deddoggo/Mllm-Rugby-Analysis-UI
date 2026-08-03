@@ -1,8 +1,10 @@
-import type { AnalysisRequest } from "@/lib/domain";
-import { analysisResponseSchema, externalEventsSchema } from "@/lib/domain";
+import type { AnalysisRequest, ApiVideoEvent, VideoEvent } from "@/lib/domain";
+import {
+  analysisResponseSchema,
+  eventListResponseSchema,
+  apiVideoEventSchema,
+} from "@/lib/domain";
 import type { AnalysisService, EventRepository, VideoRepository } from "./contracts";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
 export interface VideoUploadResponse {
   video_id: string;
@@ -18,8 +20,9 @@ interface UploadVideoOptions {
 }
 
 function getApiUrl() {
-  if (!apiUrl) throw new Error("NEXT_PUBLIC_API_URL is not configured.");
-  return apiUrl.replace(/\/$/, "");
+  const configuredUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!configuredUrl) throw new Error("NEXT_PUBLIC_API_URL is not configured.");
+  return configuredUrl.replace(/\/$/, "");
 }
 
 export function getVideoStreamUrl(videoId: string) {
@@ -36,6 +39,28 @@ function uploadErrorMessage(response: unknown, fallback: string) {
       .join(" ");
   }
   return detail ? JSON.stringify(detail) : fallback;
+}
+
+async function apiErrorMessage(response: Response, fallback: string) {
+  try {
+    return uploadErrorMessage(await response.json(), fallback);
+  } catch {
+    return fallback;
+  }
+}
+
+function mapApiEvent(event: ApiVideoEvent): VideoEvent {
+  return {
+    id: event.id,
+    videoId: event.video_id,
+    label: event.label,
+    start: event.start,
+    end: event.end,
+    confidence: event.confidence,
+    detectedStart: event.detected_start,
+    detectedEnd: event.detected_end,
+    adjusted: event.adjusted,
+  };
 }
 
 function isVideoUploadResponse(response: unknown): response is VideoUploadResponse {
@@ -80,6 +105,53 @@ export function uploadVideo(
   });
 }
 
+export async function detectEvents(
+  videoId: string,
+  options: { force?: boolean } = {},
+): Promise<VideoEvent[]> {
+  const query = options.force ? "?force=true" : "";
+  const response = await fetch(
+    `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/events/detect${query}`,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, `Event detection failed (${response.status}).`));
+  }
+  const payload = eventListResponseSchema.parse(await response.json());
+  return payload.events.filter((event) => event.label !== "Background").map(mapApiEvent);
+}
+
+export async function getEvents(videoId: string): Promise<VideoEvent[]> {
+  const response = await fetch(
+    `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/events`,
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, `Event loading failed (${response.status}).`));
+  }
+  const payload = eventListResponseSchema.parse(await response.json());
+  return payload.events.filter((event) => event.label !== "Background").map(mapApiEvent);
+}
+
+export async function updateEventBoundaries(
+  videoId: string,
+  eventId: string,
+  start: number,
+  end: number,
+): Promise<VideoEvent> {
+  const response = await fetch(
+    `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start, end }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, `Event update failed (${response.status}).`));
+  }
+  return mapApiEvent(apiVideoEventSchema.parse(await response.json()));
+}
+
 export class ApiVideoRepository implements VideoRepository {
   async getDemoVideo() {
     // TODO: replace with POST /api/v1/videos when uploads are enabled.
@@ -89,19 +161,26 @@ export class ApiVideoRepository implements VideoRepository {
 
 export class ApiEventRepository implements EventRepository {
   async getEvents(videoId: string) {
-    const response = await fetch(`${apiUrl}/api/v1/videos/${videoId}/events`);
-    if (!response.ok) throw new Error("Backend event service is unavailable.");
-    return externalEventsSchema.parse(await response.json()).map((event) => ({
-      ...event,
-      detectedStart: event.start,
-      detectedEnd: event.end,
-    }));
+    return getEvents(videoId);
+  }
+
+  async detectEvents(videoId: string, force = false) {
+    return detectEvents(videoId, { force });
+  }
+
+  async updateEventBoundaries(
+    videoId: string,
+    eventId: string,
+    start: number,
+    end: number,
+  ) {
+    return updateEventBoundaries(videoId, eventId, start, end);
   }
 }
 
 export class ApiAnalysisService implements AnalysisService {
   async analyze(request: AnalysisRequest) {
-    const response = await fetch(`${apiUrl}/api/v1/analysis`, {
+    const response = await fetch(`${getApiUrl()}/api/v1/analysis`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),

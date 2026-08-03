@@ -2,11 +2,11 @@
 
 import { CheckCircle2, FileVideo2, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
-import { getVideoStreamUrl, uploadVideo } from "@/services/api";
+import { detectEvents, getVideoStreamUrl, uploadVideo } from "@/services/api";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 const ACCEPTED_VIDEO_TYPES = ".mp4,.mov,.mkv";
-type UploadPhase = "idle" | "uploading" | "processing" | "ready" | "error";
+type UploadPhase = "idle" | "uploading" | "processing" | "detecting" | "ready" | "error";
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B";
@@ -29,10 +29,11 @@ export function VideoUpload() {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useWorkspaceStore((state) => state.currentVideo);
   const setCurrentVideo = useWorkspaceStore((state) => state.setCurrentVideo);
+  const detectEventsForVideo = useWorkspaceStore((state) => state.detectEventsForVideo);
   const [phase, setPhase] = useState<UploadPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const busy = phase === "uploading" || phase === "processing";
+  const busy = phase === "uploading" || phase === "processing" || phase === "detecting";
 
   const submit = async (file?: File) => {
     if (!file || busy) return;
@@ -49,7 +50,15 @@ export function VideoUpload() {
         duration: response.duration,
         size: response.size,
       });
-      setPhase("ready");
+      setPhase("detecting");
+      try {
+        await detectEventsForVideo(response.video_id, detectEvents);
+        setPhase("ready");
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : "Event detection failed.";
+        setError(`Video ready, but event detection failed: ${message}`);
+        setPhase("ready");
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Video upload failed.");
       setPhase("error");
@@ -84,8 +93,8 @@ export function VideoUpload() {
       >
         <span className="upload-icon">{busy ? <span className="spinner" /> : <UploadCloud size={21} />}</span>
         <span aria-live="polite">
-          <strong>{phase === "uploading" ? "Uploading" : phase === "processing" ? "Processing video" : upload ? "Upload another match video" : "Upload a match video"}</strong>
-          <small>{phase === "processing" ? "Upload complete. Normalizing for browser playback..." : "Drop an MP4, MOV, or MKV file here, or click to browse"}</small>
+          <strong>{phase === "uploading" ? "Uploading" : phase === "processing" ? "Processing video" : phase === "detecting" ? "Detecting rugby event proposals..." : upload ? "Upload another match video" : "Upload a match video"}</strong>
+          <small>{phase === "processing" ? "Upload complete. Normalizing for browser playback..." : phase === "detecting" ? "Video ready. Running the temporary mock detector." : "Drop an MP4, MOV, or MKV file here, or click to browse"}</small>
         </span>
       </button>
 

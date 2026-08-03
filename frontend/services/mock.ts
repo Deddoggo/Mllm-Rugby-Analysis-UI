@@ -24,6 +24,21 @@ export class MockEventRepository implements EventRepository {
       detectedEnd: event.end,
     }));
   }
+
+  async detectEvents(videoId: string) {
+    return this.getEvents(videoId);
+  }
+
+  async updateEventBoundaries(
+    videoId: string,
+    eventId: string,
+    start: number,
+    end: number,
+  ) {
+    const event = (await this.getEvents(videoId)).find((item) => item.id === eventId);
+    if (!event) throw new Error("Event not found.");
+    return { ...event, start, end, adjusted: true };
+  }
 }
 
 const observations: Record<AnalysisRequest["eventLabel"], string> = {

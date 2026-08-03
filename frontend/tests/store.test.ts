@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { VideoEvent } from "@/lib/domain";
 
@@ -13,7 +13,14 @@ const event: VideoEvent = {
 };
 
 describe("workspace store", () => {
-  beforeEach(() => useWorkspaceStore.setState({ currentVideo: null, events: [], selectedId: null, chats: {} }));
+  beforeEach(() => useWorkspaceStore.setState({
+    currentVideo: null,
+    events: [],
+    selectedId: null,
+    chats: {},
+    eventDetectionStatus: "idle",
+    eventDetectionError: null,
+  }));
 
   it("selects, adjusts, and resets event boundaries", () => {
     useWorkspaceStore.getState().setEvents([event]);
@@ -46,5 +53,36 @@ describe("workspace store", () => {
     expect(useWorkspaceStore.getState().currentVideo?.name).toBe("uploaded-match.mp4");
     expect(useWorkspaceStore.getState().events).toEqual([]);
     expect(useWorkspaceStore.getState().selectedId).toBeNull();
+  });
+
+  it("tracks uploaded-video detection and stores returned events", async () => {
+    let finishDetection: ((events: VideoEvent[]) => void) | undefined;
+    const detector = vi.fn(() => new Promise<VideoEvent[]>((resolve) => {
+      finishDetection = resolve;
+    }));
+
+    const detection = useWorkspaceStore.getState().detectEventsForVideo(
+      "match_20260803_abcd1234",
+      detector,
+    );
+    expect(useWorkspaceStore.getState().eventDetectionStatus).toBe("detecting");
+    finishDetection?.([event]);
+    await detection;
+
+    expect(detector).toHaveBeenCalledOnce();
+    expect(useWorkspaceStore.getState().eventDetectionStatus).toBe("ready");
+    expect(useWorkspaceStore.getState().events).toEqual([event]);
+    expect(useWorkspaceStore.getState().selectedId).toBe(event.id);
+  });
+
+  it("retains a retryable detection failure state", async () => {
+    const detector = vi.fn().mockRejectedValue(new Error("Detector unavailable"));
+    await expect(useWorkspaceStore.getState().detectEventsForVideo(
+      "match_20260803_abcd1234",
+      detector,
+    )).rejects.toThrow("Detector unavailable");
+
+    expect(useWorkspaceStore.getState().eventDetectionStatus).toBe("error");
+    expect(useWorkspaceStore.getState().eventDetectionError).toBe("Detector unavailable");
   });
 });
