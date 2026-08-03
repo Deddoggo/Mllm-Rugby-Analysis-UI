@@ -9,6 +9,10 @@ import { EventTimeline } from "@/components/timeline/event-timeline";
 import { VideoPanel } from "@/components/video/video-panel";
 import type { VideoPanelHandle } from "@/components/video/video-panel";
 
+vi.mock("@/components/ui/app-scroll-area", () => ({
+  AppScrollArea: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 const event: VideoEvent = {
   id: "event_001",
   videoId: "match_20260803_abcd1234",

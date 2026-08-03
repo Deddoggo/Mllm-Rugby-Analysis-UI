@@ -24,6 +24,7 @@ import {
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
+import { AppScrollArea } from "@/components/ui/app-scroll-area";
 
 type NavigationItem = [LucideIcon, string, boolean?];
 
@@ -81,19 +82,21 @@ export function AppSidebar() {
           {!collapsed && <span>Analyze Match</span>}
         </button>
 
-        <nav aria-label="Primary navigation">
-          {groups.map((group) => (
-            <section className="nav-group" key={group.label}>
-              {!collapsed && <p>{group.label}</p>}
-              {group.items.map(([Icon, label, active]) => (
-                <button className={`nav-item ${active ? "active" : ""}`} key={String(label)} title={String(label)}>
-                  <Icon size={16} />
-                  {!collapsed && <span>{String(label)}</span>}
-                </button>
-              ))}
-            </section>
-          ))}
-        </nav>
+        <AppScrollArea className="sidebar-scroll-area" viewportClassName="sidebar-scroll-viewport" testId="sidebar-scroll-area">
+          <nav aria-label="Primary navigation">
+            {groups.map((group) => (
+              <section className="nav-group" key={group.label}>
+                {!collapsed && <p>{group.label}</p>}
+                {group.items.map(([Icon, label, active]) => (
+                  <button className={`nav-item ${active ? "active" : ""}`} key={String(label)} title={String(label)}>
+                    <Icon size={16} />
+                    {!collapsed && <span>{String(label)}</span>}
+                  </button>
+                ))}
+              </section>
+            ))}
+          </nav>
+        </AppScrollArea>
 
         <div className="sidebar-bottom">
           {!collapsed && (

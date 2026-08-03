@@ -86,7 +86,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   box-shadow: 0 4px 12px rgba(25, 44, 31, .05); cursor: pointer; white-space: nowrap;
 }
 .analyze-button svg { color: var(--primary); }
-.sidebar nav { overflow-y: auto; padding-right: 2px; scrollbar-width: thin; }
+.sidebar-scroll-area { flex: 1; min-height: 0; }
+.sidebar-scroll-viewport { height: 100%; }
+.sidebar nav { padding-right: 2px; }
 .nav-group { padding: 13px 0 7px; border-bottom: 1px solid #e7e9e5; }
 .nav-group:last-child { border: 0; }
 .nav-group p { margin: 0 10px 6px; color: #929792; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .1em; }
@@ -214,7 +216,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .timeline-tools { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
 .timeline-tools button { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 7px; background: #fafbfa; cursor: pointer; }
 .timeline-tools strong { font-size: 9px; width: 34px; text-align: center; }
-.timeline-scroll { overflow-x: auto; padding-bottom: 2px; }
+.timeline-scroll { width: 100%; padding-bottom: 2px; }
+.timeline-scroll-viewport { width: 100%; }
 .timeline-canvas { min-width: 100%; transition: width .2s; }
 .timeline-ruler { position: relative; height: 26px; margin: 7px 10px 0; color: #9aa09a; font-size: 8px; }
 .timeline-ruler:after { content: ""; position: absolute; bottom: 4px; left: 0; right: 0; border-bottom: 1px solid #edf0ed; }

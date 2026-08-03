@@ -13,6 +13,7 @@ import {
   getTimelineGeometry,
   pixelToTime,
 } from "@/lib/timeline-geometry";
+import { AppScrollArea } from "@/components/ui/app-scroll-area";
 
 const eventTone: Record<EventLabel, string> = {
   Scrum: "scrum",
@@ -295,7 +296,13 @@ export function EventTimeline({
           <button aria-label="Timeline settings"><SlidersHorizontal size={14} /></button>
         </div>
       </div>
-      <div className="timeline-scroll" ref={overviewViewportRef} data-testid="timeline-scroll-area">
+      <AppScrollArea
+        className="timeline-scroll"
+        viewportClassName="timeline-scroll-viewport"
+        orientation="both"
+        viewportRef={overviewViewportRef}
+        testId="timeline-scroll-area"
+      >
         <div className="timeline-canvas" style={{ width: `${zoom * 100}%` }}>
           <div className="timeline-ruler">
             {ticks.map((tick) => <span key={tick} style={{ left: `${(tick / safeDuration) * 100}%` }}>{formatTime(tick)}</span>)}
@@ -326,7 +333,7 @@ export function EventTimeline({
             )}
           </div>
         </div>
-      </div>
+      </AppScrollArea>
 
       {selectedEffective && detailRange && (
         <div className="event-detail-editor">

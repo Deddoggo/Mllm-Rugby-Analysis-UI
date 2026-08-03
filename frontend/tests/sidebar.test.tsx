@@ -2,8 +2,12 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+
+vi.mock("@/components/ui/app-scroll-area", () => ({
+  AppScrollArea: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
 
 describe("sidebar animation regression", () => {
   afterEach(() => {

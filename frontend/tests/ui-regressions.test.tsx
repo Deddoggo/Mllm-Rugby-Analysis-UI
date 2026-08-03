@@ -18,6 +18,10 @@ import {
 } from "@/lib/timeline-geometry";
 import { normalizeEventBoundaries } from "@/lib/time";
 
+vi.mock("@/components/ui/app-scroll-area", () => ({
+  AppScrollArea: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 const originalEvent: VideoEvent = {
   id: "event_001",
   videoId: "match_20260803_abcd1234",
