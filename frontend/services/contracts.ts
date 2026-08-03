@@ -1,6 +1,7 @@
 import type {
   AnalysisRequest,
   AnalysisResponse,
+  EventClip,
   VideoAsset,
   VideoEvent,
 } from "@/lib/domain";
@@ -17,4 +18,10 @@ export interface EventRepository {
 
 export interface AnalysisService {
   analyze(request: AnalysisRequest): Promise<AnalysisResponse>;
+}
+
+export interface ClipRepository {
+  createClip(videoId: string, eventId: string, force?: boolean): Promise<EventClip>;
+  getClip(videoId: string, clipId: string): Promise<EventClip>;
+  listClips(videoId: string): Promise<EventClip[]>;
 }

@@ -26,6 +26,7 @@ export function AnalysisPanel({
   selected,
   messages,
   loading,
+  preparingClip,
   error,
   onSubmit,
   onRetry,
@@ -33,6 +34,7 @@ export function AnalysisPanel({
   selected?: VideoEvent;
   messages: ChatMessage[];
   loading: boolean;
+  preparingClip: boolean;
   error: string | null;
   onSubmit: (question: string) => void;
   onRetry: () => void;
@@ -73,7 +75,7 @@ export function AnalysisPanel({
               </div>
             </article>
           ))}
-          {loading && <div className="analysis-loading"><span /><span /><span /> Mock VLM is reviewing the adjusted clip…</div>}
+          {loading && <div className="analysis-loading"><span /><span /><span /> {preparingClip ? "Preparing selected clip before mock analysis…" : "Mock analysis is reviewing the prepared clip…"}</div>}
           {error && <div className="analysis-error">{error}<button onClick={onRetry}>Try again</button></div>}
         </div>
       )}

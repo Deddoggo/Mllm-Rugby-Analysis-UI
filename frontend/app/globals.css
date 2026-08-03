@@ -256,6 +256,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .summary-actions { margin-left: auto; display: flex; gap: 5px; }
 .summary-actions button { height: 27px; border: 1px solid var(--border); border-radius: 7px; padding: 0 8px; display: flex; align-items: center; gap: 4px; background: #fff; font-size: 8px; cursor: pointer; }
 .summary-actions .preview-button { background: var(--primary); border-color: var(--primary); color: #fff; }
+.summary-actions .preview-button:disabled { opacity: .55; cursor: wait; }
+.clip-preview { max-width: 720px; margin: 12px auto 0; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.clip-preview header, .clip-preview footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; }
+.clip-preview header { border-bottom: 1px solid var(--border); }.clip-preview header div { display: flex; flex-direction: column; gap: 2px; }
+.clip-preview header span, .clip-preview footer { color: var(--muted); font-size: 8px; }.clip-preview header strong { font-size: 10px; }
+.clip-preview header button { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 7px; background: transparent; cursor: pointer; }
+.clip-preview video { display: block; width: 100%; max-height: 340px; background: #050806; }
+.clip-preview footer { flex-wrap: wrap; border-top: 1px solid var(--border); }
+.clip-preview-state { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 10px; }
+.clip-preview-state.error { color: #9b3931; }.clip-preview-state.error button { border: 0; background: transparent; text-decoration: underline; cursor: pointer; }
 .analysis-panel { margin-top: 16px; }
 .analysis-empty { text-align: center; padding: 20px 0 13px; }
 .analysis-empty h2 { margin: 9px 0 4px; font-size: clamp(20px, 2.3vw, 29px); letter-spacing: -.04em; font-weight: 570; }
@@ -386,6 +396,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .dark .selected-summary > i { background: #344139; }
 .dark .selected-summary .selected-label { color: #91d0aa; background: #1b3326; }
 .dark .selected-summary strong { color: #dce5de; }
+.dark .clip-preview { background: #141c17; border-color: #2b3830; }.dark .clip-preview header, .dark .clip-preview footer { border-color: #2b3830; }
 .dark .analysis-empty h2 { color: #edf3ef; }
 .dark .analysis-ball { background: #1a3325; border-color: #355642; }
 .dark .composer { background: #151e18; border-color: #34483a; box-shadow: 0 12px 32px rgba(0,0,0,.25); }

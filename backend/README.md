@@ -67,7 +67,35 @@ data/
   processed/  match_<id>_processed.mp4
   metadata/   videos.json
   events/     <video_id>.json
+  clips/      <video_id>/clips.json and cached event MP4 files
 ```
+
+## On-demand clip extraction
+
+Clips are extracted only when the user previews a selected event or submits a
+question. `POST /videos/{video_id}/clips` accepts an `event_id` and optional
+`force`; authoritative boundaries always come from `EventRepository`.
+
+The stable cache identity is SHA256 over the video ID, event ID, boundaries
+rounded to three decimals, and `accurate-h264-v1` profile. Unchanged boundaries
+reuse the existing file after its presence is verified. Adjusted boundaries
+produce a new identity while older prototype artifacts are retained.
+
+Extraction uses the existing Windows-safe subprocess layer and accurate H.264
+re-encoding. It prefers `h264_nvenc -preset p4`, falls back to
+`libx264 -preset medium`, maps audio optionally, encodes available audio as AAC,
+uses `yuv420p`, and writes fast-start MP4 output. Temporary files are validated
+with FFprobe and atomically finalized before `clips.json` is updated.
+
+```http
+POST /videos/{video_id}/clips
+GET  /videos/{video_id}/clips
+GET  /videos/{video_id}/clips/{clip_id}
+GET  /videos/{video_id}/clips/{clip_id}/stream
+```
+
+Clip and video streaming share the same HTTP Range response helper. Generated
+MP4 files and runtime `clips.json` documents are ignored by Git.
 
 ## Event Data Layer
 
@@ -130,6 +158,8 @@ app/
   main.py             FastAPI application entry point
   api/videos.py       Video HTTP endpoints
   api/events.py       Event detection, retrieval, and boundary endpoints
+  api/clips.py        Lazy extraction, metadata, and clip stream endpoints
+  schemas/clip.py     Persistent and public clip contracts
   schemas/event.py    Event persistence and API contracts
   schemas/video.py    Video metadata and response schemas
   core/config.py      Runtime data directory configuration
@@ -139,4 +169,7 @@ app/
   services/video_processing.py FFmpeg inspection and normalization
   services/event_repository.py Atomic event JSON repository
   services/event_detection.py Detector orchestration and adapter boundary
+  services/clip_repository.py Atomic per-video clip metadata repository
+  services/clip_extraction.py Authoritative-boundary extraction and caching
+  services/media_streaming.py Shared HTTP Range media responses
 ```

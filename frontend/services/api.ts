@@ -1,10 +1,12 @@
-import type { AnalysisRequest, ApiVideoEvent, VideoEvent } from "@/lib/domain";
+import type { AnalysisRequest, ApiClip, ApiVideoEvent, EventClip, VideoEvent } from "@/lib/domain";
 import {
   analysisResponseSchema,
   eventListResponseSchema,
   apiVideoEventSchema,
+  apiClipSchema,
+  clipListResponseSchema,
 } from "@/lib/domain";
-import type { AnalysisService, EventRepository, VideoRepository } from "./contracts";
+import type { AnalysisService, ClipRepository, EventRepository, VideoRepository } from "./contracts";
 
 export interface VideoUploadResponse {
   video_id: string;
@@ -60,6 +62,26 @@ function mapApiEvent(event: ApiVideoEvent): VideoEvent {
     detectedStart: event.detected_start,
     detectedEnd: event.detected_end,
     adjusted: event.adjusted,
+  };
+}
+
+function mapApiClip(clip: ApiClip): EventClip {
+  const streamUrl = clip.stream_url.startsWith("http")
+    ? clip.stream_url
+    : `${getApiUrl()}${clip.stream_url}`;
+  return {
+    clipId: clip.clip_id,
+    videoId: clip.video_id,
+    eventId: clip.event_id,
+    eventLabel: clip.event_label,
+    start: clip.start,
+    end: clip.end,
+    duration: clip.duration,
+    status: clip.status,
+    streamUrl,
+    extractionProfile: clip.extraction_profile,
+    createdAt: clip.created_at,
+    cached: clip.cached,
   };
 }
 
@@ -152,6 +174,43 @@ export async function updateEventBoundaries(
   return mapApiEvent(apiVideoEventSchema.parse(await response.json()));
 }
 
+export async function createClip(
+  videoId: string,
+  eventId: string,
+  force = false,
+): Promise<EventClip> {
+  const response = await fetch(
+    `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/clips`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: eventId, force }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, `Clip extraction failed (${response.status}).`));
+  }
+  return mapApiClip(apiClipSchema.parse(await response.json()));
+}
+
+export async function getClip(videoId: string, clipId: string): Promise<EventClip> {
+  const response = await fetch(
+    `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/clips/${encodeURIComponent(clipId)}`,
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, `Clip loading failed (${response.status}).`));
+  }
+  return mapApiClip(apiClipSchema.parse(await response.json()));
+}
+
+export async function listClips(videoId: string): Promise<EventClip[]> {
+  const response = await fetch(`${getApiUrl()}/videos/${encodeURIComponent(videoId)}/clips`);
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, `Clip loading failed (${response.status}).`));
+  }
+  return clipListResponseSchema.parse(await response.json()).clips.map(mapApiClip);
+}
+
 export class ApiVideoRepository implements VideoRepository {
   async getDemoVideo() {
     // TODO: replace with POST /api/v1/videos when uploads are enabled.
@@ -175,6 +234,20 @@ export class ApiEventRepository implements EventRepository {
     end: number,
   ) {
     return updateEventBoundaries(videoId, eventId, start, end);
+  }
+}
+
+export class ApiClipRepository implements ClipRepository {
+  createClip(videoId: string, eventId: string, force = false) {
+    return createClip(videoId, eventId, force);
+  }
+
+  getClip(videoId: string, clipId: string) {
+    return getClip(videoId, clipId);
+  }
+
+  listClips(videoId: string) {
+    return listClips(videoId);
   }
 }
 

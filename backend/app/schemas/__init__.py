@@ -6,10 +6,15 @@ from app.schemas.event import (
     EventListResponse,
     VideoEvent,
 )
+from app.schemas.clip import ClipCreateRequest, ClipCreateResponse, ClipListResponse, ClipRecord
 
 __all__ = [
     "EventBoundaryUpdateRequest",
     "EventDetectionResponse",
     "EventListResponse",
     "VideoEvent",
+    "ClipCreateRequest",
+    "ClipCreateResponse",
+    "ClipListResponse",
+    "ClipRecord",
 ]

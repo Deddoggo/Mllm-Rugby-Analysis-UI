@@ -99,6 +99,7 @@ See `frontend/README.md` for the current prototype workflow, mock mode, and prep
 - Model inference: not implemented.
 - Video preprocessing: implemented.
 - Event proposals: deterministic mock only; real V-JEPA2 and VLM processing remain future work.
+- Event clip extraction: lazy, boundary-authoritative, cached H.264/AAC MP4 output with Range preview streaming.
 
 ## Uploaded-video event flow
 
@@ -115,3 +116,15 @@ semantics are not real inference. The future
 `ai-service/vjepa2/real_detector.py` adapter will load
 `rugby_linear_head_5_classes` and implement the existing `EventDetector`
 contract without changing routes, persistence, or frontend components.
+
+## On-demand selected-event clips
+
+No clips are created during upload or event detection. Previewing an event or
+submitting a question asks the backend to read the latest persisted event,
+extract only that 2–60 second interval, validate it, and cache it under
+`data/clips/{video_id}/`. Cache identity includes the normalized boundaries and
+the extraction profile, so edits make prior clips stale without deleting them.
+
+The frontend previews the resulting Range stream in a player separate from the
+full-match clock. Question submission prepares/reuses the clip first and passes
+its ID into the existing mock analysis context; no VLM inference is claimed.

@@ -131,3 +131,56 @@ def run_ffmpeg(
         raise FFmpegExecutionError(f"FFmpeg normalization failed: {message}") from error
     except OSError as error:
         raise FFmpegExecutionError(f"FFmpeg could not start: {error}") from error
+
+
+def run_clip_ffmpeg(
+    input_path: str | Path,
+    output_path: str | Path,
+    start: float,
+    duration: float,
+    video_encoder: str = "libx264",
+) -> None:
+    """Accurately re-encode a bounded H.264/AAC event clip."""
+    if video_encoder not in {"libx264", "h264_nvenc"}:
+        raise ValueError(f"Unsupported H.264 encoder: {video_encoder}")
+    ffmpeg = find_media_executable("ffmpeg")
+    if ffmpeg is None:
+        raise FFmpegExecutionError("FFmpeg is not installed or is not on PATH.")
+    preset = "p4" if video_encoder == "h264_nvenc" else "medium"
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-ss",
+        f"{start:.3f}",
+        "-i",
+        str(input_path),
+        "-t",
+        f"{duration:.3f}",
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a:0?",
+        "-c:v",
+        video_encoder,
+        "-preset",
+        preset,
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "+faststart",
+        str(output_path),
+    ]
+    try:
+        subprocess.run(command, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as error:
+        message = (error.stderr or error.stdout or str(error)).strip()
+        if len(message) > 2000:
+            message = message[-2000:]
+        raise FFmpegExecutionError(f"FFmpeg clip extraction failed: {message}") from error
+    except OSError as error:
+        raise FFmpegExecutionError(f"FFmpeg could not start: {error}") from error

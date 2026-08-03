@@ -36,6 +36,11 @@ Future responsibilities:
 - event-clip video question answering;
 - structured behavioral analysis responses.
 
+The backend now prepares an accurate, cached event clip on preview/question and
+records its `clip_id`. A future VLM HTTP contract should accept that identifier,
+resolve the prepared stream or artifact, and return real evidence-backed output.
+Current chat responses remain mocked and do not inspect the clip.
+
 ## `rag/`
 
 Future responsibilities:

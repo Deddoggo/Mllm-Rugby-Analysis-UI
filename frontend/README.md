@@ -68,6 +68,21 @@ POST /api/v1/analysis
 
 Zod validates all external event and analysis responses.
 
+## Selected-event clip preview
+
+Clip extraction is lazy. Selecting, detecting, moving, or resizing an event does
+not create media. For uploaded videos, **Preview clip** or question submission
+calls `POST /videos/{video_id}/clips` with only the selected `event_id`; the
+backend reads the latest persisted boundaries. The compact preview player is
+independent of the full-match playback clock.
+
+The workspace tracks `idle`, `extracting`, `ready`, and `error` clip states.
+Changing an event boundary marks the selected clip stale without deleting the
+server artifact or triggering extraction. A later preview/question receives a
+new boundary-specific clip or reuses a matching backend cache entry. Questions
+carry the prepared `clipId` in their request context, but answers remain clearly
+mocked while the VLM is offline.
+
 ## Domain model
 
 The core types are `VideoAsset`, `VideoEvent`, `AnalysisRequest`, `AnalysisResponse`, and `ChatMessage`. Detected timestamps remain immutable in `detectedStart` and `detectedEnd`; adjusted `start` and `end` values are committed only when pointer interaction finishes.
@@ -88,13 +103,13 @@ tests/          domain and workspace behavior
 
 1. Upload a full match and persist a `VideoAsset`.
 2. Run V-JEPA2 event detection and return validated proposals.
-3. Use FFmpeg server-side to extract the analyst-adjusted interval.
-4. Send the clip, metadata, and question to Gemma or Qwen-VL.
+3. Reuse the implemented on-demand FFmpeg clip extraction service.
+4. Send the prepared `clipId`, metadata, and question to Gemma or Qwen-VL.
 5. Stream the structured response into the event-scoped analysis record.
 
 ## Known limitations
 
-- Video upload and persistence are intentionally not implemented.
 - The bundled demo contains event metadata but no match video.
+- Clip extraction is available only for uploaded, processed backend videos.
 - Mock answers do not inspect pixels and must not be treated as tactical evidence.
 - Backend, V-JEPA2, FFmpeg, and VLM availability indicators are demonstrative.

@@ -3,13 +3,13 @@
 import { Eye, Plus, RotateCcw, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AnalysisRequest, ChatMessage } from "@/lib/domain";
+import type { AnalysisRequest, ChatMessage, EventClip, VideoEvent } from "@/lib/domain";
 import { formatTime, normalizeEventBoundaries } from "@/lib/time";
 import {
   getBoundaryPersistenceErrorMessage,
   persistEventBoundaries,
 } from "@/lib/event-boundary-persistence";
-import { detectEvents, updateEventBoundaries } from "@/services/api";
+import { createClip, detectEvents, updateEventBoundaries } from "@/services/api";
 import { services } from "@/services/factory";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { AppShell } from "@/components/layout/app-shell";
@@ -19,6 +19,8 @@ import { VideoUpload } from "@/components/video/video-upload";
 import { EventTimeline } from "@/components/timeline/event-timeline";
 import { AnalysisPanel } from "./analysis-panel";
 import { EventGrid } from "@/components/events/event-grid";
+import { prepareEventClip } from "@/lib/clip-selection";
+import { ClipPreview } from "./clip-preview";
 
 export function AnalysisWorkspace() {
   const videoPanelRef = useRef<VideoPanelHandle>(null);
@@ -28,6 +30,9 @@ export function AnalysisWorkspace() {
   const chats = useWorkspaceStore((state) => state.chats);
   const eventDetectionStatus = useWorkspaceStore((state) => state.eventDetectionStatus);
   const eventDetectionError = useWorkspaceStore((state) => state.eventDetectionError);
+  const selectedClip = useWorkspaceStore((state) => state.selectedClip);
+  const clipStatus = useWorkspaceStore((state) => state.clipStatus);
+  const clipError = useWorkspaceStore((state) => state.clipError);
   const setEvents = useWorkspaceStore((state) => state.setEvents);
   const selectEvent = useWorkspaceStore((state) => state.selectEvent);
   const updateBounds = useWorkspaceStore((state) => state.updateBounds);
@@ -35,10 +40,11 @@ export function AnalysisWorkspace() {
   const resetBounds = useWorkspaceStore((state) => state.resetBounds);
   const addMessages = useWorkspaceStore((state) => state.addMessages);
   const detectEventsForVideo = useWorkspaceStore((state) => state.detectEventsForVideo);
+  const setClipState = useWorkspaceStore((state) => state.setClipState);
   const [search, setSearch] = useState("");
   const [current, setCurrent] = useState(0);
   const [observedDuration, setObservedDuration] = useState({ sourceId: "demo", value: 300 });
-  const [previewSignal, setPreviewSignal] = useState(0);
+  const [clipPreviewOpen, setClipPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState("");
@@ -131,27 +137,50 @@ export function AnalysisWorkspace() {
     }
   }, [commitBounds, currentVideo, resetBounds]);
 
+  const ensureClip = useCallback(async (event: VideoEvent): Promise<EventClip | null> => {
+    if (!currentVideo) return null;
+    return prepareEventClip({
+      videoId: currentVideo.id,
+      event,
+      currentClip: useWorkspaceStore.getState().selectedClip,
+      create: createClip,
+      onState: setClipState,
+    });
+  }, [currentVideo, setClipState]);
+
+  const previewClip = useCallback(async () => {
+    if (!selected || !currentVideo) return;
+    setClipPreviewOpen(true);
+    try {
+      await ensureClip(selected);
+    } catch {
+      // The workspace store retains the visible extraction error.
+    }
+  }, [currentVideo, ensureClip, selected]);
+
   const ask = useCallback(async (question: string) => {
     if (!selected) return;
     setLoading(true);
     setError(null);
     setLastQuestion(question);
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: question,
-      createdAt: new Date().toISOString(),
-    };
-    addMessages(selected.id, [userMessage]);
-    const request: AnalysisRequest = {
-      videoId: currentVideo?.id ?? "demo-toulouse-asm",
-      eventId: selected.id,
-      start: selected.start,
-      end: selected.end,
-      eventLabel: selected.label,
-      question,
-    };
     try {
+      const clip = currentVideo ? await ensureClip(selected) : null;
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: question,
+        createdAt: new Date().toISOString(),
+      };
+      addMessages(selected.id, [userMessage]);
+      const request: AnalysisRequest = {
+        videoId: currentVideo?.id ?? "demo-toulouse-asm",
+        eventId: selected.id,
+        start: selected.start,
+        end: selected.end,
+        eventLabel: selected.label,
+        question,
+        clipId: clip?.clipId,
+      };
       const response = await services.analysis.analyze(request);
       addMessages(selected.id, [{
         id: response.id,
@@ -166,7 +195,7 @@ export function AnalysisWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [selected, addMessages, currentVideo]);
+  }, [selected, addMessages, currentVideo, ensureClip]);
 
   return (
     <AppShell search={search} onSearch={setSearch}>
@@ -201,7 +230,7 @@ export function AnalysisWorkspace() {
             onTime={setCurrent}
             onDuration={observeDuration}
             selected={selected}
-            previewSignal={previewSignal}
+            previewSignal={0}
             video={currentVideo}
             detectionStatus={eventDetectionStatus}
           />
@@ -233,14 +262,25 @@ export function AnalysisWorkspace() {
               <div className="summary-actions">
                 <button onClick={() => resetEventBounds(selected.id)}><RotateCcw size={13} /> Reset</button>
                 <button><SlidersHorizontal size={13} /> Edit details</button>
-                <button className="preview-button" onClick={() => setPreviewSignal((value) => value + 1)}><Eye size={13} /> Preview clip</button>
+                <button className="preview-button" onClick={() => void previewClip()} disabled={!currentVideo || clipStatus === "extracting"}><Eye size={13} /> Preview clip</button>
               </div>
             </div>
           ) : <div className="selected-summary empty">Choose an event to inspect and analyze.</div>}
+          {clipPreviewOpen && selected && currentVideo && (
+            <ClipPreview
+              event={selected}
+              clip={selectedClip}
+              status={clipStatus}
+              error={clipError}
+              onClose={() => setClipPreviewOpen(false)}
+              onRetry={() => void previewClip()}
+            />
+          )}
           <AnalysisPanel
             selected={selected}
             messages={selected ? chats[selected.id] ?? [] : []}
             loading={loading}
+            preparingClip={clipStatus === "extracting"}
             error={error}
             onSubmit={ask}
             onRetry={() => lastQuestion && ask(lastQuestion)}

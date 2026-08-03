@@ -19,6 +19,7 @@ from app.services.storage import (
     save_video,
 )
 from app.services.video_metadata import VideoMetadataService
+from app.services.media_streaming import media_file_response
 from app.services.video_processing import (
     VideoProcessingError,
     check_video_format,
@@ -260,8 +261,4 @@ async def stream_video(video_id: str) -> FileResponse:
         ".mov": "video/quicktime",
         ".mkv": "video/x-matroska",
     }
-    return FileResponse(
-        stored_path,
-        media_type=media_types[stored_path.suffix.lower()],
-        headers={"Accept-Ranges": "bytes"},
-    )
+    return media_file_response(stored_path, media_types[stored_path.suffix.lower()])

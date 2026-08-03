@@ -1,11 +1,12 @@
-import type { AnalysisService, EventRepository, VideoRepository } from "./contracts";
-import { ApiAnalysisService, ApiEventRepository, ApiVideoRepository } from "./api";
+import type { AnalysisService, ClipRepository, EventRepository, VideoRepository } from "./contracts";
+import { ApiAnalysisService, ApiClipRepository, ApiEventRepository, ApiVideoRepository } from "./api";
 import { MockAnalysisService, MockEventRepository, MockVideoRepository } from "./mock";
 
 export interface Services {
   video: VideoRepository;
   events: EventRepository;
   analysis: AnalysisService;
+  clips: ClipRepository;
 }
 
 export function createServices(
@@ -16,12 +17,14 @@ export function createServices(
       video: new ApiVideoRepository(),
       events: new ApiEventRepository(),
       analysis: new ApiAnalysisService(),
+      clips: new ApiClipRepository(),
     };
   }
   return {
     video: new MockVideoRepository(),
     events: new MockEventRepository(),
     analysis: new MockAnalysisService(),
+    clips: new ApiClipRepository(),
   };
 }
 

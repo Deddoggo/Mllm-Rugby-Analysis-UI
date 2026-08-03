@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { VideoEvent } from "@/lib/domain";
+import type { EventClip, VideoEvent } from "@/lib/domain";
 
 const event: VideoEvent = {
   id: "event_001",
@@ -20,6 +20,9 @@ describe("workspace store", () => {
     chats: {},
     eventDetectionStatus: "idle",
     eventDetectionError: null,
+    selectedClip: null,
+    clipStatus: "idle",
+    clipError: null,
   }));
 
   it("selects, adjusts, and resets event boundaries", () => {
@@ -84,5 +87,28 @@ describe("workspace store", () => {
 
     expect(useWorkspaceStore.getState().eventDetectionStatus).toBe("error");
     expect(useWorkspaceStore.getState().eventDetectionError).toBe("Detector unavailable");
+  });
+
+  it("marks a prepared clip stale without extracting when boundaries change", () => {
+    const clip: EventClip = {
+      clipId: "clip_event_001_abcd1234",
+      videoId: "match_20260803_abcd1234",
+      eventId: event.id,
+      eventLabel: event.label,
+      start: event.start,
+      end: event.end,
+      duration: event.end - event.start,
+      status: "ready",
+      streamUrl: "http://backend.test/clip.mp4",
+      extractionProfile: "accurate-h264-v1",
+      createdAt: "2026-08-03T20:00:00Z",
+      cached: false,
+    };
+    useWorkspaceStore.getState().setEvents([event]);
+    useWorkspaceStore.getState().setClipState("ready", clip);
+    useWorkspaceStore.getState().updateBounds(event.id, 40, 58);
+
+    expect(useWorkspaceStore.getState().selectedClip).toBeNull();
+    expect(useWorkspaceStore.getState().clipStatus).toBe("idle");
   });
 });
