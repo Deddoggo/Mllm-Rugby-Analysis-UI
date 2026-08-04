@@ -86,8 +86,31 @@ See `frontend/README.md` for the current prototype workflow, mock mode, and prep
 ## Environment strategy
 
 - Frontend: Node.js with pnpm.
-- Backend: Conda environment named `rugby-backend`, defined in `backend/environment.yml`.
-- AI service: a future, separate Conda environment for PyTorch and VLM dependencies; it is not created yet.
+- Backend: Conda environment `rugby-backend`, defined only by
+  `backend/environment.yml`.
+- AI service: independent Conda environment `rugby-ai`, defined only by
+  `ai-service/environment.yml`.
+- Python requirements files are not maintained; each `environment.yml` is the
+  single source of truth for its service.
+
+Create and activate the backend environment:
+
+```bash
+cd backend
+conda env create -f environment.yml
+conda activate rugby-backend
+```
+
+Create and activate the AI service environment:
+
+```bash
+cd ai-service
+conda env create -f environment.yml
+conda activate rugby-ai
+```
+
+The current AI environment is intentionally lightweight. A future model-enabled
+environment can add PyTorch/VLM dependencies when real inference work begins.
 
 ## Current scope
 

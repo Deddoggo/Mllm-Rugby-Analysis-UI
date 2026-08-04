@@ -150,6 +150,9 @@ The `rugby_linear_head_5_classes` integration belongs in
 
 ## Run locally
 
+`environment.yml` is the backend's single dependency source. No pip
+requirements file is maintained.
+
 ```bash
 conda env create -f environment.yml
 conda activate rugby-backend

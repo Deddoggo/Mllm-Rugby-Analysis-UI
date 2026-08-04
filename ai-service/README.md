@@ -1,60 +1,130 @@
-# AI Service
+# Rugby Intelligence AI Service
 
-This directory owns isolated contracts and future implementations for the Rugby
-Intelligence inference pipeline. It contains no real model runtime yet.
+This directory is the independent FastAPI boundary for future rugby inference.
+It currently provides a real HTTP contract, context assembly, and a deterministic
+mock VLM. It does not load or run any machine-learning model.
 
-## `vjepa2/`
+## Current request flow
 
-Current contents:
+```text
+Frontend
+  -> Backend
+      -> AI Service
+          -> ContextBuilder
+          -> MockVLM
+```
 
-- `contracts.py`: stable `EventDetector` protocol and proposal shape;
-- `mock_detector.py`: deterministic temporary proposals used in process by the backend.
+The backend is not connected to this service yet. Existing upload, event
+detection, clip extraction, timeline, and mock chat behavior therefore remain
+unchanged.
 
-Future responsibilities:
+## API
 
-- video event detection;
-- sliding-window inference;
-- event proposal generation.
+```http
+GET  /health
+POST /analysis/query
+```
 
-The real `rugby_linear_head_5_classes` adapter will be implemented at
-`vjepa2/real_detector.py`. It will replace the mock behind the same contract and
-modularize model loading, four-second windows, one-second stride, 16-frame
-sampling, approximately 0.80 confidence thresholding, Background suppression,
-temporal smoothing/merging, roughly two-second tolerance, filtering, and proposal
-generation. No PyTorch, Transformers, TorchCodec, or checkpoint dependency is
-included now.
+Example analysis request:
 
-The backend currently imports the mock adapter in process. A later deployment
-will move this boundary behind an AI-service HTTP API without changing event
-routes, JSON persistence, frontend contracts, timeline behavior, or upload flow.
+```json
+{
+  "video_id": "match_20260803_abcd1234",
+  "event_id": "event_001",
+  "clip_id": "clip_event_001_abcd1234",
+  "question": "Explain this scrum phase"
+}
+```
 
-## `vlm/`
+Example response:
 
-Future responsibilities:
+```json
+{
+  "answer": "This is a scrum phase. A future model would analyze player formation, engagement, stability, and the possession outcome.",
+  "model": "mock-vlm",
+  "context_used": {
+    "event": {
+      "label": "Scrum",
+      "start": 42.0,
+      "end": 55.0,
+      "confidence": 0.92
+    },
+    "clip": {
+      "duration": 13.0
+    }
+  }
+}
+```
 
-- Gemma/Qwen multimodal inference;
-- event-clip video question answering;
-- structured behavioral analysis responses.
+`ContextBuilder` is a read-only consumer of the existing backend JSON contracts
+at `data/events/{video_id}.json` and
+`data/clips/{video_id}/clips.json`. Missing, empty, or malformed metadata yields
+empty event/clip context instead of failing analysis. It contains no persistence,
+cache, extraction, or metadata-writing logic.
 
-The backend now prepares an accurate, cached event clip on preview/question and
-records its `clip_id`. A future VLM HTTP contract should accept that identifier,
-resolve the prepared stream or artifact, and return real evidence-backed output.
-Current chat responses remain mocked and do not inspect the clip.
+## Run locally
 
-## `rag/`
+From `ai-service/`:
 
-Future responsibilities:
+```bash
+conda env create -f environment.yml
+conda activate rugby-ai
+python -m app.main
+```
 
-- rugby rules retrieval;
-- match and event metadata retrieval;
-- contextual evidence assembly for VLM prompts.
+Configuration:
 
-## `tracking/`
+- `AI_SERVICE_HOST` defaults to `127.0.0.1`.
+- `AI_SERVICE_PORT` defaults to `8100`.
+- `RUGBY_DATA_DIR` optionally overrides the repository `data/` directory used
+  for read-only context lookup.
 
-Future responsibilities:
+The module launcher starts Uvicorn with reload enabled and reads host/port from
+those settings. Uvicorn can still be invoked directly when deployment tooling
+supplies its own process configuration.
 
-- player detection;
-- player and ball tracking;
-- pitch localization.
+`environment.yml` is the AI service's single dependency source. It contains the
+minimal runtime packages (FastAPI, Uvicorn, and Pydantic) plus pytest and HTTPX
+for endpoint tests. It intentionally contains no model-inference dependencies.
 
-Dependencies will be added to `requirements.txt` only when the relevant implementation begins.
+## Tests
+
+```bash
+conda activate rugby-ai
+python -m compileall app tests
+pytest
+```
+
+Tests cover health, the analysis query contract, deterministic event-aware mock
+answers, context mapping, and missing/malformed metadata recovery.
+
+## Existing V-JEPA2 boundary
+
+The top-level `vjepa2/` package remains the stable detector contract currently
+used in process by the backend. `vjepa2/mock_detector.py` continues to provide
+deterministic proposals. This milestone does not move event detection behind the
+AI-service HTTP API and does not add model dependencies.
+
+The future `rugby_linear_head_5_classes` adapter belongs at
+`vjepa2/real_detector.py` behind the existing `EventDetector` contract.
+
+## Future architecture
+
+```text
+Backend
+  -> AI Service
+      +------------------------+
+      | V-JEPA2 detection      |
+      | VLM video analysis     |
+      | Rugby knowledge RAG    |
+      | Player/ball tracking   |
+      | OCR/context extraction |
+      +------------------------+
+```
+
+The first real VLM adapter will implement `app/vlm/interface.py` and be injected
+into `AnalysisService`. Replacing `MockVLM` must not require changes to the
+`POST /analysis/query` contract, context builder, or API route.
+
+No PyTorch, Transformers, TorchCodec, OpenCV, vLLM, Qwen, or Gemma dependency is
+included in this milestone.
