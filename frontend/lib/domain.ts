@@ -170,3 +170,10 @@ export const analysisResponseSchema = z.object({
   processingTime: z.number().optional(),
   createdAt: z.string(),
 });
+
+export const analysisGatewayResponseSchema = z.object({
+  answer: z.string().min(1),
+  provider: z.string().min(1),
+  confidence: z.literal("limited"),
+  metadata: z.record(z.string(), z.unknown()),
+});

@@ -1,6 +1,6 @@
 """Stable request and response contracts for multimodal analysis."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,13 +17,21 @@ class AnalysisQueryRequest(BaseModel):
 class AnalysisContextUsed(BaseModel):
     """Public context supplied to the active VLM adapter."""
 
+    video: dict[str, Any] = Field(default_factory=dict)
     event: dict[str, Any] = Field(default_factory=dict)
     clip: dict[str, Any] = Field(default_factory=dict)
+
+
+class AnalysisMetadata(BaseModel):
+    """Structured evidence passed to the active provider."""
+
+    context_used: AnalysisContextUsed
 
 
 class AnalysisQueryResponse(BaseModel):
     """Model-independent answer contract."""
 
     answer: str
-    model: str
-    context_used: AnalysisContextUsed
+    provider: str
+    confidence: Literal["limited"] = "limited"
+    metadata: AnalysisMetadata

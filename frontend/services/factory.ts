@@ -13,6 +13,7 @@ import {
   ApiVideoRepository,
 } from "./api";
 import { MockAnalysisService, MockEventRepository, MockVideoRepository } from "./mock";
+import { ClipAwareAnalysisService } from "./analysis";
 
 export interface Services {
   video: VideoRepository;
@@ -37,7 +38,10 @@ export function createServices(
   return {
     video: new MockVideoRepository(),
     events: new MockEventRepository(),
-    analysis: new MockAnalysisService(),
+    analysis: new ClipAwareAnalysisService(
+      new MockAnalysisService(),
+      new ApiAnalysisService(),
+    ),
     clips: new ApiClipRepository(),
     clipPreviews: new ApiClipPreviewRepository(),
   };

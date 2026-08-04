@@ -28,9 +28,9 @@ The `frontend/` application owns:
 - the event-scoped chat interface;
 - mock and future HTTP service implementations.
 
-Demo analysis remains available through frontend mock services. Real uploads use
-the backend upload, streaming, and event APIs while retaining the current mock
-chat implementation.
+Demo analysis remains available through frontend mock services. Questions about
+real uploaded clips use the backend analysis gateway and independent AI service;
+the active provider is still deterministic `mock-rugby-vlm`.
 
 ### Backend
 
@@ -40,6 +40,7 @@ The `backend/` directory contains the first functional FastAPI milestone:
 - multipart video upload validation;
 - local video storage, browser playback, and basic metadata extraction;
 - JSON event persistence, detection APIs, and boundary updates.
+- validated persistent-clip analysis forwarding to the AI service.
 
 Event proposals currently come from a deterministic mock detector. Database
 persistence and real AI processing are not implemented yet.
@@ -47,8 +48,9 @@ persistence and real AI processing are not implemented yet.
 ### AI service
 
 The `ai-service/` directory separates V-JEPA2, VLM, RAG, and tracking modules.
-Its `vjepa2/` package now contains the detector contract and temporary mock; it
-does not load PyTorch or a model checkpoint.
+Its `vjepa2/` package contains the detector contract and temporary mock. Its
+FastAPI analysis endpoint assembles video/event/clip context and invokes the
+mock VLM provider. It does not load PyTorch or a model checkpoint.
 
 ### Data
 
@@ -117,7 +119,8 @@ environment can add PyTorch/VLM dependencies when real inference work begins.
 - Frontend prototype: implemented and working.
 - Backend: video upload pipeline implemented.
 - Event Data Layer: real API and JSON contracts with mocked proposals.
-- AI service: detector abstraction implemented; real inference unavailable.
+- AI service: analysis API, context builder, and mock VLM provider implemented;
+  real inference remains unavailable.
 - Database and production file storage: not implemented.
 - Model inference: not implemented.
 - Video preprocessing: implemented.
@@ -131,7 +134,7 @@ Upload and preprocess video
   -> POST /videos/{video_id}/events/detect
   -> mock EventDetector proposal generation
   -> data/events/{video_id}.json
-  -> frontend timeline, boundary editing, and mock chat context
+  -> frontend timeline, boundary editing, and analysis context
 ```
 
 The Event Data Layer and API contract are production-shaped, but proposal
@@ -150,7 +153,30 @@ cleanup for abandoned resources.
 
 Question submission is the only frontend flow that prepares or reuses a
 persistent cached clip. Cache identity includes normalized boundaries and the
-extraction profile, and its ID is passed into the existing mock analysis context;
-no VLM inference is claimed. Full-match and temporary-preview playback share one
-themed custom `VideoPlayer`, while each HTML video element remains authoritative
-for its own playback clock.
+extraction profile. The browser submits the question to the backend clip-analysis
+gateway, which validates metadata and calls the AI service. The response comes
+from `mock-rugby-vlm`; no real VLM inference is claimed. Full-match and
+temporary-preview playback share one themed custom `VideoPlayer`, while each
+HTML video element remains authoritative for its own playback clock.
+
+## Run the integrated analysis flow
+
+Terminal 1:
+
+```bash
+cd backend
+conda activate rugby-backend
+uvicorn app.main:app --reload --port 8000
+```
+
+Terminal 2:
+
+```bash
+cd ai-service
+conda activate rugby-ai
+python -m app.main
+```
+
+The backend reads `AI_SERVICE_URL`, defaulting to `http://localhost:8100`. The AI
+service reads `AI_SERVICE_HOST` and `AI_SERVICE_PORT`, defaulting to
+`127.0.0.1:8100`.

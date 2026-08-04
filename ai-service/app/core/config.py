@@ -15,6 +15,7 @@ class Settings:
     data_dir: Path
     events_dir: Path
     clips_dir: Path
+    video_metadata_file: Path
 
 
 def load_settings() -> Settings:
@@ -33,6 +34,7 @@ def load_settings() -> Settings:
         data_dir=data_dir,
         events_dir=data_dir / "events",
         clips_dir=data_dir / "clips",
+        video_metadata_file=data_dir / "metadata" / "videos.json",
     )
 
 

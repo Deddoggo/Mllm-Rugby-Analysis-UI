@@ -53,17 +53,20 @@ Set `NEXT_PUBLIC_MEDIA_DEBUG=true` only while diagnosing playback. It enables
 concise media lifecycle, source, pause, and programmatic-seek diagnostics in
 development builds.
 
-Mock analysis waits briefly, responds according to the selected event label, identifies itself as `mock-rugby-vlm`, and explicitly notes that visual inference is simulated.
+Clipless demo analysis waits briefly, responds according to the selected event
+label, identifies itself as `mock-rugby-vlm`, and explicitly notes that visual
+inference is simulated.
 
 ## API mode
 
 Set `NEXT_PUBLIC_DATA_MODE=api`. The visual application remains unchanged; the factory selects the API repositories. Prepared contracts expect:
 
 ```http
-POST /api/v1/videos
-POST /api/v1/videos/{videoId}/events/detect
-GET /api/v1/videos/{videoId}/events
-POST /api/v1/analysis
+POST /videos/upload
+POST /videos/{videoId}/events/detect
+GET /videos/{videoId}/events
+POST /videos/{videoId}/clips
+POST /videos/{videoId}/clips/{clipId}/analysis
 ```
 
 Zod validates all external event and analysis responses.
@@ -80,8 +83,11 @@ create or reuse a boundary-specific analysis clip and pass its `clipId` onward.
 Preview uses its own `idle`, `loading`, `ready`, and `error` state. Persistent
 analysis preparation retains its separate `idle`, `extracting`, `ready`, and
 `error` state. Changing an event boundary marks only the analysis clip stale.
-Questions carry the prepared persistent `clipId` in their request context, but
-answers remain clearly mocked while the VLM is offline.
+Questions with a prepared persistent `clipId` call
+`POST /videos/{video_id}/clips/{clip_id}/analysis` on the backend. The backend
+validates the clip and forwards it to the independent AI service. Answers remain
+deterministic mock output from `mock-rugby-vlm`; clipless demo questions retain
+the existing frontend mock.
 
 `components/video/video-player.tsx` supplies the same themed custom controls for
 both match and preview playback: play/pause, real-media seeking, elapsed time,

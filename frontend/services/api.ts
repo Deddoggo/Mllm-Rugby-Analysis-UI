@@ -9,6 +9,7 @@ import type {
 } from "@/lib/domain";
 import {
   analysisResponseSchema,
+  analysisGatewayResponseSchema,
   eventListResponseSchema,
   apiVideoEventSchema,
   apiClipSchema,
@@ -324,12 +325,26 @@ export class ApiClipPreviewRepository implements ClipPreviewRepository {
 
 export class ApiAnalysisService implements AnalysisService {
   async analyze(request: AnalysisRequest) {
-    const response = await fetch(`${getApiUrl()}/api/v1/analysis`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
+    if (!request.clipId) throw new Error("A prepared clip is required for analysis.");
+    const started = performance.now();
+    const response = await fetch(
+      `${getApiUrl()}/videos/${encodeURIComponent(request.videoId)}/clips/${encodeURIComponent(request.clipId)}/analysis`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: request.question }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(await apiErrorMessage(response, `AI analysis failed (${response.status}).`));
+    }
+    const payload = analysisGatewayResponseSchema.parse(await response.json());
+    return analysisResponseSchema.parse({
+      id: crypto.randomUUID(),
+      answer: payload.answer,
+      model: payload.provider,
+      processingTime: Math.round(performance.now() - started),
+      createdAt: new Date().toISOString(),
     });
-    if (!response.ok) throw new Error("AI analysis backend is unavailable.");
-    return analysisResponseSchema.parse(await response.json());
   }
 }

@@ -8,7 +8,7 @@ from app.vlm.interface import VLMInterface
 class MockVLM(VLMInterface):
     """Return stable event-aware answers without inspecting video pixels."""
 
-    name = "mock-vlm"
+    name = "mock-rugby-vlm"
     _answers = {
         "scrum": (
             "This is a scrum phase. A future model would analyze player formation, "

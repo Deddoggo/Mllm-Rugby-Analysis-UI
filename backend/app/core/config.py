@@ -1,5 +1,6 @@
-"""Filesystem configuration for backend runtime data."""
+"""Backend filesystem and service configuration."""
 
+import os
 from pathlib import Path
 
 
@@ -12,3 +13,4 @@ CLIPS_DIR = DATA_DIR / "clips"
 METADATA_DIR = DATA_DIR / "metadata"
 VIDEO_METADATA_FILE = METADATA_DIR / "videos.json"
 AI_SERVICE_DIR = REPOSITORY_ROOT / "ai-service"
+AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:8100").rstrip("/")

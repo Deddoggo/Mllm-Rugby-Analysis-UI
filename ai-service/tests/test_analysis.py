@@ -17,7 +17,15 @@ EVENT_ID = "event_001"
 CLIP_ID = "clip_event_001_abcd1234"
 
 
-def write_context(events_dir: Path, clips_dir: Path) -> None:
+def write_context(events_dir: Path, clips_dir: Path, metadata_file: Path) -> None:
+    metadata_file.parent.mkdir(parents=True)
+    metadata_file.write_text(json.dumps([{
+        "video_id": VIDEO_ID,
+        "filename": "match.mp4",
+        "duration": 180.0,
+        "size": 123456,
+        "status": "processed",
+    }]), encoding="utf-8")
     events_dir.mkdir(parents=True)
     (events_dir / f"{VIDEO_ID}.json").write_text(
         json.dumps({
@@ -64,10 +72,11 @@ def test_health_endpoint() -> None:
 def test_analysis_query_endpoint_uses_available_context(tmp_path: Path) -> None:
     events_dir = tmp_path / "events"
     clips_dir = tmp_path / "clips"
-    write_context(events_dir, clips_dir)
+    metadata_file = tmp_path / "metadata" / "videos.json"
+    write_context(events_dir, clips_dir, metadata_file)
     service = AnalysisService(
         vlm=MockVLM(),
-        context_builder=ContextBuilder(events_dir, clips_dir),
+        context_builder=ContextBuilder(events_dir, clips_dir, metadata_file),
     )
     app.dependency_overrides[get_analysis_service] = lambda: service
     try:
@@ -83,11 +92,14 @@ def test_analysis_query_endpoint_uses_available_context(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["model"] == "mock-vlm"
+    assert payload["provider"] == "mock-rugby-vlm"
+    assert payload["confidence"] == "limited"
     assert payload["answer"].startswith("This is a scrum phase.")
-    assert payload["context_used"]["event"]["label"] == "Scrum"
-    assert payload["context_used"]["clip"]["duration"] == 13.0
-    assert "path" not in payload["context_used"]["clip"]
+    context = payload["metadata"]["context_used"]
+    assert context["video"]["filename"] == "match.mp4"
+    assert context["event"]["label"] == "Scrum"
+    assert context["clip"]["duration"] == 13.0
+    assert "path" not in context["clip"]
 
 
 def test_mock_vlm_response_is_deterministic_by_event_type() -> None:
@@ -108,7 +120,11 @@ def test_missing_and_malformed_context_are_graceful(tmp_path: Path) -> None:
     (events_dir / f"{VIDEO_ID}.json").write_text("{broken", encoding="utf-8")
     (clip_dir / "clips.json").write_text("", encoding="utf-8")
 
-    context = ContextBuilder(events_dir, clips_dir).build(
+    context = ContextBuilder(
+        events_dir,
+        clips_dir,
+        tmp_path / "metadata" / "videos.json",
+    ).build(
         VIDEO_ID,
         EVENT_ID,
         CLIP_ID,
@@ -117,6 +133,39 @@ def test_missing_and_malformed_context_are_graceful(tmp_path: Path) -> None:
 
     assert context["event"] == {}
     assert context["clip"] == {}
+    assert context["video"] == {}
     assert context["_clip_path"] == ""
     answer = MockVLM().analyze("", context["question"], context)
     assert answer.startswith("This is an unclassified phase.")
+
+
+def test_invalid_request_returns_422() -> None:
+    with TestClient(app) as client:
+        response = client.post("/analysis/query", json={
+            "video_id": VIDEO_ID,
+            "event_id": EVENT_ID,
+            "clip_id": CLIP_ID,
+            "question": "",
+        })
+    assert response.status_code == 422
+
+
+def test_provider_error_returns_500() -> None:
+    class FailingVLM(MockVLM):
+        def analyze(self, clip_path, question, context):
+            raise RuntimeError("provider exploded")
+
+    service = AnalysisService(vlm=FailingVLM())
+    app.dependency_overrides[get_analysis_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            response = client.post("/analysis/query", json={
+                "video_id": VIDEO_ID,
+                "event_id": EVENT_ID,
+                "clip_id": CLIP_ID,
+                "question": "What happened?",
+            })
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 500
+    assert response.json()["detail"] == "VLM provider failed."

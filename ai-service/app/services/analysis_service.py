@@ -3,10 +3,15 @@
 from app.context.builder import ContextBuilder
 from app.schemas.analysis import (
     AnalysisContextUsed,
+    AnalysisMetadata,
     AnalysisQueryRequest,
     AnalysisQueryResponse,
 )
 from app.vlm.interface import VLMInterface
+
+
+class AnalysisProviderError(RuntimeError):
+    """Raised when the configured VLM provider fails internally."""
 
 
 class AnalysisService:
@@ -28,12 +33,19 @@ class AnalysisService:
             request.question,
         )
         clip_path = str(context.pop("_clip_path", ""))
-        answer = self.vlm.analyze(clip_path, request.question, context)
+        try:
+            answer = self.vlm.analyze(clip_path, request.question, context)
+        except Exception as error:
+            raise AnalysisProviderError("VLM provider failed.") from error
         return AnalysisQueryResponse(
             answer=answer,
-            model=self.vlm.name,
-            context_used=AnalysisContextUsed(
-                event=context.get("event", {}),
-                clip=context.get("clip", {}),
+            provider=self.vlm.name,
+            confidence="limited",
+            metadata=AnalysisMetadata(
+                context_used=AnalysisContextUsed(
+                    video=context.get("video", {}),
+                    event=context.get("event", {}),
+                    clip=context.get("clip", {}),
+                ),
             ),
         )

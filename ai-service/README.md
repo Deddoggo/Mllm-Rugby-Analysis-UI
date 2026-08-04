@@ -14,9 +14,9 @@ Frontend
           -> MockVLM
 ```
 
-The backend is not connected to this service yet. Existing upload, event
-detection, clip extraction, timeline, and mock chat behavior therefore remain
-unchanged.
+The backend connects to this service only after it validates a persistent clip.
+Upload, event detection, clip extraction, timeline, and player behavior remain
+owned by their existing layers.
 
 ## API
 
@@ -41,26 +41,37 @@ Example response:
 ```json
 {
   "answer": "This is a scrum phase. A future model would analyze player formation, engagement, stability, and the possession outcome.",
-  "model": "mock-vlm",
-  "context_used": {
-    "event": {
-      "label": "Scrum",
-      "start": 42.0,
-      "end": 55.0,
-      "confidence": 0.92
-    },
-    "clip": {
-      "duration": 13.0
+  "provider": "mock-rugby-vlm",
+  "confidence": "limited",
+  "metadata": {
+    "context_used": {
+      "video": {
+        "filename": "match.mp4",
+        "duration": 180.0
+      },
+      "event": {
+        "label": "Scrum",
+        "start": 42.0,
+        "end": 55.0,
+        "confidence": 0.92
+      },
+      "clip": {
+        "duration": 13.0
+      }
     }
   }
 }
 ```
 
 `ContextBuilder` is a read-only consumer of the existing backend JSON contracts
-at `data/events/{video_id}.json` and
+at `data/metadata/videos.json`, `data/events/{video_id}.json`, and
 `data/clips/{video_id}/clips.json`. Missing, empty, or malformed metadata yields
 empty event/clip context instead of failing analysis. It contains no persistence,
 cache, extraction, or metadata-writing logic.
+
+FastAPI returns HTTP 422 for invalid request payloads. Provider failures are
+wrapped by `AnalysisService` and returned as HTTP 500 without exposing internal
+exceptions.
 
 ## Run locally
 

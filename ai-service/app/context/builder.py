@@ -18,9 +18,11 @@ class ContextBuilder:
         self,
         events_dir: Path = settings.events_dir,
         clips_dir: Path = settings.clips_dir,
+        video_metadata_file: Path = settings.video_metadata_file,
     ) -> None:
         self.events_dir = events_dir.resolve()
         self.clips_dir = clips_dir.resolve()
+        self.video_metadata_file = video_metadata_file.resolve()
 
     def build(
         self,
@@ -33,14 +35,35 @@ class ContextBuilder:
         self._validate_id(video_id)
         self._validate_id(event_id)
         self._validate_id(clip_id)
+        video = self._find_video(video_id)
         event = self._find_event(video_id, event_id)
         clip = self._find_clip(video_id, event_id, clip_id)
         clip_path = self._resolve_clip_path(video_id, clip_id) if clip else ""
         return {
+            "video": video,
             "event": event,
             "clip": clip,
             "question": question,
             "_clip_path": clip_path,
+        }
+
+    def _find_video(self, video_id: str) -> dict[str, Any]:
+        payload = self._read_json(self.video_metadata_file)
+        if not isinstance(payload, list):
+            return {}
+        item = next(
+            (
+                candidate for candidate in payload
+                if isinstance(candidate, dict) and candidate.get("video_id") == video_id
+            ),
+            None,
+        )
+        if item is None:
+            return {}
+        return {
+            key: item[key]
+            for key in ("video_id", "filename", "duration", "size", "status")
+            if key in item
         }
 
     def _find_event(self, video_id: str, event_id: str) -> dict[str, Any]:

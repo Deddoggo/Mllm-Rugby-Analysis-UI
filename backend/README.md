@@ -10,6 +10,7 @@ This directory contains the FastAPI service for Rugby Intelligence.
 - `POST /videos/{video_id}/events/detect` cached or forced event detection;
 - `GET /videos/{video_id}/events` predictable event retrieval;
 - `PATCH /videos/{video_id}/events/{event_id}` persisted boundary adjustment;
+- `POST /videos/{video_id}/clips/{clip_id}/analysis` validated AI-service gateway;
 - streamed local storage in the repository's `data/videos/` directory;
 - SHA256 duplicate detection with stable video IDs;
 - JSON video metadata in `data/metadata/videos.json`;
@@ -17,9 +18,9 @@ This directory contains the FastAPI service for Rugby Intelligence.
 - file size metadata and duration metadata through `ffprobe`.
 - atomic JSON event documents in `data/events/{video_id}.json`.
 
-Database persistence and real AI processing are deliberately not implemented.
-Event proposals are deterministic mock data; the repository, schemas, and API
-contracts are real.
+Database persistence and real model inference are deliberately not implemented.
+Event proposals and VLM answers are deterministic mock data; the repositories,
+schemas, gateway, and API contracts are real.
 
 ## Video metadata
 
@@ -159,6 +160,20 @@ conda activate rugby-backend
 uvicorn app.main:app --reload --port 8000
 ```
 
+`AI_SERVICE_URL` configures the downstream service and defaults to
+`http://localhost:8100`. The analysis gateway validates the video and persistent
+clip locally, derives the event ID from authoritative clip metadata, and then
+calls `POST /analysis/query`. Connection failures return HTTP 503; missing clips
+return HTTP 404.
+
+Run the AI service separately before asking questions about uploaded clips:
+
+```bash
+cd ../ai-service
+conda activate rugby-ai
+python -m app.main
+```
+
 Run backend tests with:
 
 ```bash
@@ -173,6 +188,7 @@ app/
   api/videos.py       Video HTTP endpoints
   api/events.py       Event detection, retrieval, and boundary endpoints
   api/clips.py        Lazy extraction, metadata, and clip stream endpoints
+  api/analysis.py     Validated clip analysis gateway
   schemas/clip.py     Persistent and public clip contracts
   schemas/event.py    Event persistence and API contracts
   schemas/video.py    Video metadata and response schemas
@@ -185,5 +201,6 @@ app/
   services/event_detection.py Detector orchestration and adapter boundary
   services/clip_repository.py Atomic per-video clip metadata repository
   services/clip_extraction.py Authoritative-boundary extraction and caching
+  services/ai_client.py Typed async AI-service HTTP client
   services/media_streaming.py Shared HTTP Range media responses
 ```

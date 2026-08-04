@@ -1,0 +1,133 @@
+"""Backend-to-AI-service client and analysis gateway tests."""
+
+import asyncio
+import unittest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+import httpx
+from fastapi import HTTPException
+
+from app.api.analysis import analyze_clip
+from app.schemas.analysis import (
+    AIServiceAnalysisRequest,
+    AnalysisGatewayResponse,
+    AnalysisQuestionRequest,
+)
+from app.services.ai_client import AIServiceClient, AIServiceUnavailableError
+
+
+VIDEO_ID = "match_20260803_abcd1234"
+EVENT_ID = "event_001"
+CLIP_ID = "clip_event_001_abcd1234"
+
+
+class FakeMetadataService:
+    def __init__(self, exists: bool = True) -> None:
+        self.exists = exists
+
+    def get_by_id(self, video_id: str):
+        return SimpleNamespace(video_id=video_id) if self.exists else None
+
+
+class FakeClipRepository:
+    def __init__(self, exists: bool = True) -> None:
+        self.exists = exists
+
+    def get_clip(self, video_id: str, clip_id: str):
+        if not self.exists:
+            return None
+        return SimpleNamespace(
+            video_id=video_id,
+            event_id=EVENT_ID,
+            clip_id=clip_id,
+        )
+
+
+class AIServiceClientTests(unittest.TestCase):
+    def test_mock_ai_service_response_is_typed(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.url.path, "/analysis/query")
+            self.assertIn(b'"event_id":"event_001"', request.content)
+            return httpx.Response(200, json={
+                "answer": "This is a scrum phase.",
+                "provider": "mock-rugby-vlm",
+                "confidence": "limited",
+                "metadata": {"context_used": {"event": {"label": "Scrum"}}},
+            })
+
+        client = AIServiceClient(
+            base_url="http://ai.test",
+            transport=httpx.MockTransport(handler),
+        )
+        response = asyncio.run(client.analyze(AIServiceAnalysisRequest(
+            video_id=VIDEO_ID,
+            event_id=EVENT_ID,
+            clip_id=CLIP_ID,
+            question="Explain this scrum phase",
+        )))
+        self.assertEqual(response.provider, "mock-rugby-vlm")
+        self.assertEqual(response.confidence, "limited")
+
+
+class AnalysisGatewayTests(unittest.TestCase):
+    def test_forwards_authoritative_clip_metadata(self) -> None:
+        expected = AnalysisGatewayResponse(
+            answer="This is a scrum phase.",
+            provider="mock-rugby-vlm",
+            confidence="limited",
+            metadata={},
+        )
+        client = SimpleNamespace(analyze=AsyncMock(return_value=expected))
+        with (
+            patch("app.api.analysis.metadata_service", FakeMetadataService()),
+            patch("app.api.analysis.clip_repository", FakeClipRepository()),
+            patch("app.api.analysis.ai_client", client),
+        ):
+            response = asyncio.run(analyze_clip(
+                VIDEO_ID,
+                CLIP_ID,
+                AnalysisQuestionRequest(question=" Explain this scrum phase "),
+            ))
+
+        self.assertEqual(response, expected)
+        forwarded = client.analyze.await_args.args[0]
+        self.assertEqual(forwarded.event_id, EVENT_ID)
+        self.assertEqual(forwarded.question, "Explain this scrum phase")
+
+    def test_invalid_clip_returns_404_without_calling_ai_service(self) -> None:
+        client = SimpleNamespace(analyze=AsyncMock())
+        with (
+            patch("app.api.analysis.metadata_service", FakeMetadataService()),
+            patch("app.api.analysis.clip_repository", FakeClipRepository(False)),
+            patch("app.api.analysis.ai_client", client),
+        ):
+            with self.assertRaises(HTTPException) as caught:
+                asyncio.run(analyze_clip(
+                    VIDEO_ID,
+                    CLIP_ID,
+                    AnalysisQuestionRequest(question="What happened?"),
+                ))
+        self.assertEqual(caught.exception.status_code, 404)
+        client.analyze.assert_not_awaited()
+
+    def test_unavailable_ai_service_returns_503(self) -> None:
+        client = SimpleNamespace(analyze=AsyncMock(
+            side_effect=AIServiceUnavailableError("AI service is unavailable.")
+        ))
+        with (
+            patch("app.api.analysis.metadata_service", FakeMetadataService()),
+            patch("app.api.analysis.clip_repository", FakeClipRepository()),
+            patch("app.api.analysis.ai_client", client),
+        ):
+            with self.assertRaises(HTTPException) as caught:
+                asyncio.run(analyze_clip(
+                    VIDEO_ID,
+                    CLIP_ID,
+                    AnalysisQuestionRequest(question="What happened?"),
+                ))
+        self.assertEqual(caught.exception.status_code, 503)
+
+
+if __name__ == "__main__":
+    unittest.main()
