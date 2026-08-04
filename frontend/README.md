@@ -71,17 +71,23 @@ Zod validates all external event and analysis responses.
 ## Selected-event clip preview
 
 Clip extraction is lazy. Selecting, detecting, moving, or resizing an event does
-not create media. For uploaded videos, **Preview clip** or question submission
-calls `POST /videos/{video_id}/clips` with only the selected `event_id`; the
-backend reads the latest persisted boundaries. The compact preview player is
-independent of the full-match playback clock.
+not create media. For uploaded videos, **Preview clip** calls the temporary
+`POST /videos/{video_id}/clips/preview` endpoint. Closing the preview or changing
+its event context requests cleanup, and preview media never enters the persistent
+clip cache. Question submission alone calls `POST /videos/{video_id}/clips` to
+create or reuse a boundary-specific analysis clip and pass its `clipId` onward.
 
-The workspace tracks `idle`, `extracting`, `ready`, and `error` clip states.
-Changing an event boundary marks the selected clip stale without deleting the
-server artifact or triggering extraction. A later preview/question receives a
-new boundary-specific clip or reuses a matching backend cache entry. Questions
-carry the prepared `clipId` in their request context, but answers remain clearly
-mocked while the VLM is offline.
+Preview uses its own `idle`, `loading`, `ready`, and `error` state. Persistent
+analysis preparation retains its separate `idle`, `extracting`, `ready`, and
+`error` state. Changing an event boundary marks only the analysis clip stale.
+Questions carry the prepared persistent `clipId` in their request context, but
+answers remain clearly mocked while the VLM is offline.
+
+`components/video/video-player.tsx` supplies the same themed custom controls for
+both match and preview playback: play/pause, real-media seeking, elapsed time,
+volume, fullscreen, and playback speed. Native controls are not used. The match
+wrapper retains the imperative `seekTo()` contract, with the HTML video element
+remaining the sole playback clock.
 
 ## Domain model
 

@@ -1,9 +1,11 @@
 "use client";
 
 import { X } from "lucide-react";
-import type { EventClip, VideoEvent } from "@/lib/domain";
+import type { TemporaryClipPreview, VideoEvent } from "@/lib/domain";
 import { formatTime } from "@/lib/time";
-import type { ClipStatus } from "@/stores/workspace-store";
+import { VideoPlayer } from "@/components/video/video-player";
+
+export type ClipPreviewStatus = "idle" | "loading" | "ready" | "error";
 
 export function ClipPreview({
   event,
@@ -14,8 +16,8 @@ export function ClipPreview({
   onRetry,
 }: {
   event: VideoEvent;
-  clip: EventClip | null;
-  status: ClipStatus;
+  clip: TemporaryClipPreview | null;
+  status: ClipPreviewStatus;
   error: string | null;
   onClose: () => void;
   onRetry: () => void;
@@ -29,14 +31,19 @@ export function ClipPreview({
         </div>
         <button onClick={onClose} aria-label="Close clip preview"><X size={15} /></button>
       </header>
-      {status === "extracting" && <div className="clip-preview-state"><span className="spinner" /> Preparing selected clip…</div>}
+      {status === "loading" && <div className="clip-preview-state"><span className="spinner" /> Preparing temporary preview…</div>}
       {status === "error" && <div className="clip-preview-state error">{error}<button onClick={onRetry}>Retry</button></div>}
       {status === "ready" && clip && (
         <>
-          <video controls preload="metadata" src={clip.streamUrl} data-testid="clip-preview-video" />
+          <VideoPlayer
+            src={clip.streamUrl}
+            duration={clip.duration}
+            title={`${event.label} temporary clip preview`}
+            variant="preview"
+          />
           <footer>
-            <span>{clip.duration.toFixed(1)}s · {clip.extractionProfile}</span>
-            <span>{clip.cached ? "Cached clip reused" : "New clip extracted"}</span>
+            <span>{clip.duration.toFixed(1)}s · temporary preview</span>
+            <span>Not saved to analysis cache</span>
             <span>AI Offline · analysis remains mocked</span>
           </footer>
         </>

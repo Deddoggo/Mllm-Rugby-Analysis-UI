@@ -3,7 +3,13 @@
 import { Eye, Plus, RotateCcw, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AnalysisRequest, ChatMessage, EventClip, VideoEvent } from "@/lib/domain";
+import type {
+  AnalysisRequest,
+  ChatMessage,
+  EventClip,
+  TemporaryClipPreview,
+  VideoEvent,
+} from "@/lib/domain";
 import { formatTime, normalizeEventBoundaries } from "@/lib/time";
 import {
   getBoundaryPersistenceErrorMessage,
@@ -21,6 +27,7 @@ import { AnalysisPanel } from "./analysis-panel";
 import { EventGrid } from "@/components/events/event-grid";
 import { prepareEventClip } from "@/lib/clip-selection";
 import { ClipPreview } from "./clip-preview";
+import type { ClipPreviewStatus } from "./clip-preview";
 
 export function AnalysisWorkspace() {
   const videoPanelRef = useRef<VideoPanelHandle>(null);
@@ -30,9 +37,7 @@ export function AnalysisWorkspace() {
   const chats = useWorkspaceStore((state) => state.chats);
   const eventDetectionStatus = useWorkspaceStore((state) => state.eventDetectionStatus);
   const eventDetectionError = useWorkspaceStore((state) => state.eventDetectionError);
-  const selectedClip = useWorkspaceStore((state) => state.selectedClip);
   const clipStatus = useWorkspaceStore((state) => state.clipStatus);
-  const clipError = useWorkspaceStore((state) => state.clipError);
   const setEvents = useWorkspaceStore((state) => state.setEvents);
   const selectEvent = useWorkspaceStore((state) => state.selectEvent);
   const updateBounds = useWorkspaceStore((state) => state.updateBounds);
@@ -45,6 +50,12 @@ export function AnalysisWorkspace() {
   const [current, setCurrent] = useState(0);
   const [observedDuration, setObservedDuration] = useState({ sourceId: "demo", value: 300 });
   const [clipPreviewOpen, setClipPreviewOpen] = useState(false);
+  const [temporaryPreview, setTemporaryPreview] = useState<TemporaryClipPreview | null>(null);
+  const [previewStatus, setPreviewStatus] = useState<ClipPreviewStatus>("idle");
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewOwnerContext, setPreviewOwnerContext] = useState<string | null>(null);
+  const previewArtifactRef = useRef<{ videoId: string; previewId: string } | null>(null);
+  const previewRequestRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState("");
@@ -148,15 +159,74 @@ export function AnalysisWorkspace() {
     });
   }, [currentVideo, setClipState]);
 
+  const discardPreview = useCallback(async () => {
+    const artifact = previewArtifactRef.current;
+    previewArtifactRef.current = null;
+    if (!artifact) return;
+    try {
+      await services.clipPreviews.deletePreview(artifact.videoId, artifact.previewId);
+    } catch {
+      // Temporary previews also expire server-side; cleanup is best effort.
+    }
+  }, []);
+
+  const closePreview = useCallback(() => {
+    previewRequestRef.current += 1;
+    setClipPreviewOpen(false);
+    setTemporaryPreview(null);
+    setPreviewStatus("idle");
+    setPreviewError(null);
+    setPreviewOwnerContext(null);
+    void discardPreview();
+  }, [discardPreview]);
+
+  const previewContext = currentVideo && selected
+    ? `${currentVideo.id}:${selected.id}:${selected.start}:${selected.end}`
+    : "none";
+
+  useEffect(() => {
+    const requestId = previewRequestRef.current + 1;
+    previewRequestRef.current = requestId;
+    void discardPreview().then(() => {
+      if (previewRequestRef.current !== requestId) return;
+      setClipPreviewOpen(false);
+      setTemporaryPreview(null);
+      setPreviewStatus("idle");
+      setPreviewError(null);
+      setPreviewOwnerContext(null);
+    });
+  }, [discardPreview, previewContext]);
+
+  useEffect(() => () => {
+    const artifact = previewArtifactRef.current;
+    if (artifact) void services.clipPreviews.deletePreview(artifact.videoId, artifact.previewId);
+  }, []);
+
   const previewClip = useCallback(async () => {
     if (!selected || !currentVideo) return;
+    const requestId = previewRequestRef.current + 1;
+    previewRequestRef.current = requestId;
     setClipPreviewOpen(true);
+    setPreviewStatus("loading");
+    setPreviewError(null);
+    setTemporaryPreview(null);
+    setPreviewOwnerContext(previewContext);
+    await discardPreview();
     try {
-      await ensureClip(selected);
-    } catch {
-      // The workspace store retains the visible extraction error.
+      const preview = await services.clipPreviews.createPreview(currentVideo.id, selected.id);
+      if (previewRequestRef.current !== requestId) {
+        await services.clipPreviews.deletePreview(preview.videoId, preview.previewId);
+        return;
+      }
+      previewArtifactRef.current = { videoId: preview.videoId, previewId: preview.previewId };
+      setTemporaryPreview(preview);
+      setPreviewStatus("ready");
+    } catch (caught) {
+      if (previewRequestRef.current !== requestId) return;
+      setPreviewStatus("error");
+      setPreviewError(caught instanceof Error ? caught.message : "Clip preview failed.");
     }
-  }, [currentVideo, ensureClip, selected]);
+  }, [currentVideo, discardPreview, previewContext, selected]);
 
   const ask = useCallback(async (question: string) => {
     if (!selected) return;
@@ -262,17 +332,17 @@ export function AnalysisWorkspace() {
               <div className="summary-actions">
                 <button onClick={() => resetEventBounds(selected.id)}><RotateCcw size={13} /> Reset</button>
                 <button><SlidersHorizontal size={13} /> Edit details</button>
-                <button className="preview-button" onClick={() => void previewClip()} disabled={!currentVideo || clipStatus === "extracting"}><Eye size={13} /> Preview clip</button>
+                <button className="preview-button" onClick={() => void previewClip()} disabled={!currentVideo || previewStatus === "loading"}><Eye size={13} /> Preview clip</button>
               </div>
             </div>
           ) : <div className="selected-summary empty">Choose an event to inspect and analyze.</div>}
-          {clipPreviewOpen && selected && currentVideo && (
+          {clipPreviewOpen && previewOwnerContext === previewContext && selected && currentVideo && (
             <ClipPreview
               event={selected}
-              clip={selectedClip}
-              status={clipStatus}
-              error={clipError}
-              onClose={() => setClipPreviewOpen(false)}
+              clip={temporaryPreview}
+              status={previewStatus}
+              error={previewError}
+              onClose={closePreview}
               onRetry={() => void previewClip()}
             />
           )}

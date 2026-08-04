@@ -10,9 +10,18 @@ import unittest
 from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 
-from app.api.clips import create_clip, get_clip, list_clips, stream_clip
+from app.api.clips import (
+    create_clip,
+    create_clip_preview,
+    delete_clip_preview,
+    get_clip,
+    list_clips,
+    stream_clip,
+    stream_clip_preview,
+)
 from app.api.videos import stream_video
 from app.schemas.clip import ClipCreateRequest, ClipRecord
+from app.schemas.clip_preview import ClipPreviewRequest
 from app.schemas.event import VideoEvent
 from app.schemas.video import VideoMetadata
 from app.services.clip_extraction import (
@@ -99,6 +108,7 @@ class ClipTestCase(unittest.TestCase):
             clip_repository=self.clips,
             repository_root=self.root,
             data_dir=self.data_dir,
+            preview_dir=self.data_dir / "previews",
         )
 
         async def extract(_source, output, _start, _duration):
@@ -196,6 +206,29 @@ class ClipExtractionTests(ClipTestCase):
         directory = self.clips.clip_directory(VIDEO_ID)
         self.assertEqual(list(directory.glob("*.mp4")), [])
 
+    def test_preview_is_temporary_and_never_enters_persistent_cache(self) -> None:
+        first = asyncio.run(self.service.create_preview(VIDEO_ID, "event_001"))
+        second = asyncio.run(self.service.create_preview(VIDEO_ID, "event_001"))
+
+        self.assertNotEqual(first.preview_id, second.preview_id)
+        self.assertTrue(first.temporary)
+        self.assertEqual(self.clips.list_clips(VIDEO_ID), [])
+        self.assertFalse((self.data_dir / "clips" / VIDEO_ID / "clips.json").exists())
+        self.assertFalse((self.data_dir / "clips").exists())
+        self.assertEqual(len(list((self.data_dir / "previews").glob("*.mp4"))), 2)
+
+        self.assertTrue(self.service.delete_preview(VIDEO_ID, first.preview_id))
+        self.assertIsNone(self.service.get_preview(VIDEO_ID, first.preview_id))
+        self.assertEqual(len(list((self.data_dir / "previews").glob("*.mp4"))), 1)
+
+    def test_preview_failure_removes_all_temporary_output(self) -> None:
+        self.service._extract_with_fallback = AsyncMock(
+            side_effect=ClipExtractionError("encoder failed")
+        )
+        with self.assertRaises(ClipExtractionError):
+            asyncio.run(self.service.create_preview(VIDEO_ID, "event_001"))
+        self.assertEqual(list((self.data_dir / "previews").glob("*")), [])
+
     def test_output_validation_contract(self) -> None:
         output = self.root / "clip.mp4"
         output.write_bytes(b"clip")
@@ -239,6 +272,24 @@ class ClipApiTests(ClipTestCase):
         self.assertEqual(request.event_id, "event_001")
         self.assertFalse(hasattr(request, "start"))
 
+    def test_preview_streams_then_is_cleaned_without_repository_write(self) -> None:
+        with patch("app.api.clips.clip_extraction_service", self.service):
+            preview = asyncio.run(create_clip_preview(
+                VIDEO_ID,
+                ClipPreviewRequest(event_id="event_001"),
+            ))
+            self.assertTrue(preview.temporary)
+            self.assertEqual(self.clips.list_clips(VIDEO_ID), [])
+            response = asyncio.run(stream_clip_preview(VIDEO_ID, preview.preview_id))
+            ranged = asyncio.run(self._send_file_response(response, b"bytes=0-3"))
+            self.assertEqual(ranged["status"], 206)
+            self.assertEqual(ranged["headers"][b"content-range"], b"bytes 0-3/14")
+            deleted = asyncio.run(delete_clip_preview(VIDEO_ID, preview.preview_id))
+            self.assertEqual(deleted.status_code, 204)
+            with self.assertRaises(HTTPException) as missing:
+                asyncio.run(stream_clip_preview(VIDEO_ID, preview.preview_id))
+            self.assertEqual(missing.exception.status_code, 404)
+
     def test_missing_video_and_not_ready_map_to_expected_statuses(self) -> None:
         missing = ClipExtractionService(
             metadata_service=FakeMetadataService(None),
@@ -246,6 +297,7 @@ class ClipApiTests(ClipTestCase):
             clip_repository=self.clips,
             repository_root=self.root,
             data_dir=self.data_dir,
+            preview_dir=self.data_dir / "missing-previews",
         )
         with patch("app.api.clips.clip_extraction_service", missing):
             with self.assertRaises(HTTPException) as missing_error:

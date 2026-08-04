@@ -1,12 +1,27 @@
-import type { AnalysisRequest, ApiClip, ApiVideoEvent, EventClip, VideoEvent } from "@/lib/domain";
+import type {
+  AnalysisRequest,
+  ApiClip,
+  ApiClipPreview,
+  ApiVideoEvent,
+  EventClip,
+  TemporaryClipPreview,
+  VideoEvent,
+} from "@/lib/domain";
 import {
   analysisResponseSchema,
   eventListResponseSchema,
   apiVideoEventSchema,
   apiClipSchema,
+  apiClipPreviewSchema,
   clipListResponseSchema,
 } from "@/lib/domain";
-import type { AnalysisService, ClipRepository, EventRepository, VideoRepository } from "./contracts";
+import type {
+  AnalysisService,
+  ClipPreviewRepository,
+  ClipRepository,
+  EventRepository,
+  VideoRepository,
+} from "./contracts";
 
 export interface VideoUploadResponse {
   video_id: string;
@@ -82,6 +97,24 @@ function mapApiClip(clip: ApiClip): EventClip {
     extractionProfile: clip.extraction_profile,
     createdAt: clip.created_at,
     cached: clip.cached,
+  };
+}
+
+function mapApiClipPreview(clip: ApiClipPreview): TemporaryClipPreview {
+  const streamUrl = clip.stream_url.startsWith("http")
+    ? clip.stream_url
+    : `${getApiUrl()}${clip.stream_url}`;
+  return {
+    previewId: clip.preview_id,
+    videoId: clip.video_id,
+    eventId: clip.event_id,
+    eventLabel: clip.event_label,
+    start: clip.start,
+    end: clip.end,
+    duration: clip.duration,
+    status: clip.status,
+    streamUrl,
+    temporary: clip.temporary,
   };
 }
 
@@ -193,6 +226,34 @@ export async function createClip(
   return mapApiClip(apiClipSchema.parse(await response.json()));
 }
 
+export async function createClipPreview(
+  videoId: string,
+  eventId: string,
+): Promise<TemporaryClipPreview> {
+  const response = await fetch(
+    `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/clips/preview`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: eventId }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, `Clip preview failed (${response.status}).`));
+  }
+  return mapApiClipPreview(apiClipPreviewSchema.parse(await response.json()));
+}
+
+export async function deleteClipPreview(videoId: string, previewId: string): Promise<void> {
+  const response = await fetch(
+    `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/clips/preview/${encodeURIComponent(previewId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new Error(await apiErrorMessage(response, `Clip preview cleanup failed (${response.status}).`));
+  }
+}
+
 export async function getClip(videoId: string, clipId: string): Promise<EventClip> {
   const response = await fetch(
     `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/clips/${encodeURIComponent(clipId)}`,
@@ -248,6 +309,16 @@ export class ApiClipRepository implements ClipRepository {
 
   listClips(videoId: string) {
     return listClips(videoId);
+  }
+}
+
+export class ApiClipPreviewRepository implements ClipPreviewRepository {
+  createPreview(videoId: string, eventId: string) {
+    return createClipPreview(videoId, eventId);
+  }
+
+  deletePreview(videoId: string, previewId: string) {
+    return deleteClipPreview(videoId, previewId);
   }
 }
 

@@ -2,6 +2,7 @@ import type {
   AnalysisRequest,
   AnalysisResponse,
   EventClip,
+  TemporaryClipPreview,
   VideoAsset,
   VideoEvent,
 } from "@/lib/domain";
@@ -24,4 +25,9 @@ export interface ClipRepository {
   createClip(videoId: string, eventId: string, force?: boolean): Promise<EventClip>;
   getClip(videoId: string, clipId: string): Promise<EventClip>;
   listClips(videoId: string): Promise<EventClip[]>;
+}
+
+export interface ClipPreviewRepository {
+  createPreview(videoId: string, eventId: string): Promise<TemporaryClipPreview>;
+  deletePreview(videoId: string, previewId: string): Promise<void>;
 }

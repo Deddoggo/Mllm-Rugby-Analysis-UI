@@ -119,12 +119,15 @@ contract without changing routes, persistence, or frontend components.
 
 ## On-demand selected-event clips
 
-No clips are created during upload or event detection. Previewing an event or
-submitting a question asks the backend to read the latest persisted event,
-extract only that 2–60 second interval, validate it, and cache it under
-`data/clips/{video_id}/`. Cache identity includes the normalized boundaries and
-the extraction profile, so edits make prior clips stale without deleting them.
+No clips are created during upload or event detection. Previewing an event uses
+a process-temporary extraction endpoint: it validates and streams the selected
+2–60 second interval without writing `clips.json` or adding media beneath
+`data/clips/`. Preview close/context changes request cleanup, with backend TTL
+cleanup for abandoned resources.
 
-The frontend previews the resulting Range stream in a player separate from the
-full-match clock. Question submission prepares/reuses the clip first and passes
-its ID into the existing mock analysis context; no VLM inference is claimed.
+Question submission is the only frontend flow that prepares or reuses a
+persistent cached clip. Cache identity includes normalized boundaries and the
+extraction profile, and its ID is passed into the existing mock analysis context;
+no VLM inference is claimed. Full-match and temporary-preview playback share one
+themed custom `VideoPlayer`, while each HTML video element remains authoritative
+for its own playback clock.

@@ -3,12 +3,17 @@
 import asyncio
 import hashlib
 import logging
+import tempfile
+import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import RLock
 from uuid import uuid4
 
 from app.core.config import DATA_DIR, REPOSITORY_ROOT
 from app.schemas.clip import ClipRecord
+from app.schemas.clip_preview import ClipPreviewResponse
 from app.schemas.event import VideoEvent
 from app.schemas.video import VideoMetadata
 from app.services.clip_repository import ClipRepository
@@ -27,6 +32,16 @@ MIN_CLIP_DURATION_SECONDS = 2.0
 MAX_CLIP_DURATION_SECONDS = 60.0
 DURATION_TOLERANCE_SECONDS = 0.5
 logger = logging.getLogger("uvicorn.error")
+PREVIEW_TTL_SECONDS = 60 * 60
+
+
+@dataclass(frozen=True)
+class PreviewArtifact:
+    """Temporary media path paired with its public response."""
+
+    response: ClipPreviewResponse
+    path: Path
+    created_monotonic: float
 
 
 class ClipVideoNotFoundError(LookupError):
@@ -59,12 +74,25 @@ class ClipExtractionService:
         clip_repository: ClipRepository | None = None,
         repository_root: Path = REPOSITORY_ROOT,
         data_dir: Path = DATA_DIR,
+        preview_dir: Path | None = None,
     ) -> None:
         self.metadata_service = metadata_service or VideoMetadataService()
         self.event_repository = event_repository or EventRepository()
         self.clip_repository = clip_repository or ClipRepository()
         self.repository_root = repository_root
         self.data_dir = data_dir
+        self._preview_temporary_directory = (
+            tempfile.TemporaryDirectory(prefix="rugby-clip-previews-")
+            if preview_dir is None
+            else None
+        )
+        self.preview_dir = Path(
+            Path(self._preview_temporary_directory.name)
+            if self._preview_temporary_directory is not None
+            else preview_dir
+        )
+        self._previews: dict[str, PreviewArtifact] = {}
+        self._preview_lock = RLock()
 
     async def create_clip(
         self,
@@ -72,10 +100,9 @@ class ClipExtractionService:
         event_id: str,
         force: bool = False,
     ) -> tuple[ClipRecord, bool]:
-        metadata = self._require_video(video_id)
-        source_path = self._require_source(metadata)
-        event = self._require_event(video_id, event_id)
-        start, end = self._validated_boundaries(event, metadata.duration)
+        metadata, source_path, event, start, end = self._resolve_extraction_request(
+            video_id, event_id
+        )
         clip_id = self.make_clip_id(video_id, event_id, start, end, EXTRACTION_PROFILE)
 
         if not force:
@@ -88,17 +115,8 @@ class ClipExtractionService:
         clip_directory = self.clip_repository.clip_directory(video_id)
         clip_directory.mkdir(parents=True, exist_ok=True)
         final_path = clip_directory / f"{clip_id}.mp4"
-        temporary_path = clip_directory / f".{clip_id}.{uuid4().hex}.tmp.mp4"
         duration = round(end - start, 3)
-        try:
-            await self._extract_with_fallback(source_path, temporary_path, start, duration)
-            await asyncio.to_thread(self._validate_output, temporary_path, duration)
-            temporary_path.replace(final_path)
-        except (FFmpegExecutionError, OSError, ClipExtractionError) as error:
-            temporary_path.unlink(missing_ok=True)
-            if isinstance(error, ClipExtractionError):
-                raise
-            raise ClipExtractionError(str(error)) from error
+        await self._extract_atomic(source_path, final_path, start, duration)
 
         record = ClipRecord(
             clip_id=clip_id,
@@ -121,6 +139,55 @@ class ClipExtractionService:
             final_path.unlink(missing_ok=True)
             raise
 
+    async def create_preview(self, video_id: str, event_id: str) -> ClipPreviewResponse:
+        """Create a temporary preview without touching persistent clip storage."""
+        _, source_path, event, start, end = self._resolve_extraction_request(
+            video_id, event_id
+        )
+        self._cleanup_expired_previews()
+        preview_id = f"preview_{uuid4().hex}"
+        duration = round(end - start, 3)
+        final_path = self.preview_dir / f"{preview_id}.mp4"
+        await self._extract_atomic(source_path, final_path, start, duration)
+        response = ClipPreviewResponse(
+            preview_id=preview_id,
+            video_id=video_id,
+            event_id=event_id,
+            event_label=event.label,
+            start=start,
+            end=end,
+            duration=duration,
+            stream_url=f"/videos/{video_id}/clips/preview/{preview_id}/stream",
+        )
+        with self._preview_lock:
+            self._previews[preview_id] = PreviewArtifact(
+                response=response,
+                path=final_path,
+                created_monotonic=time.monotonic(),
+            )
+        return response
+
+    def get_preview(self, video_id: str, preview_id: str) -> PreviewArtifact | None:
+        self._cleanup_expired_previews()
+        with self._preview_lock:
+            artifact = self._previews.get(preview_id)
+            if (
+                artifact is None
+                or artifact.response.video_id != video_id
+                or not artifact.path.is_file()
+            ):
+                return None
+            return artifact
+
+    def delete_preview(self, video_id: str, preview_id: str) -> bool:
+        with self._preview_lock:
+            artifact = self._previews.get(preview_id)
+            if artifact is None or artifact.response.video_id != video_id:
+                return False
+            self._previews.pop(preview_id, None)
+        artifact.path.unlink(missing_ok=True)
+        return True
+
     def get_clip(self, video_id: str, clip_id: str) -> ClipRecord | None:
         self._require_video(video_id)
         return self.clip_repository.get_clip(video_id, clip_id)
@@ -128,6 +195,50 @@ class ClipExtractionService:
     def list_clips(self, video_id: str) -> list[ClipRecord]:
         self._require_video(video_id)
         return self.clip_repository.list_clips(video_id)
+
+    def _resolve_extraction_request(
+        self,
+        video_id: str,
+        event_id: str,
+    ) -> tuple[VideoMetadata, Path, VideoEvent, float, float]:
+        metadata = self._require_video(video_id)
+        source_path = self._require_source(metadata)
+        event = self._require_event(video_id, event_id)
+        start, end = self._validated_boundaries(event, metadata.duration)
+        return metadata, source_path, event, start, end
+
+    async def _extract_atomic(
+        self,
+        source_path: Path,
+        final_path: Path,
+        start: float,
+        duration: float,
+    ) -> None:
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = final_path.with_name(
+            f".{final_path.stem}.{uuid4().hex}.tmp.mp4"
+        )
+        try:
+            await self._extract_with_fallback(source_path, temporary_path, start, duration)
+            await asyncio.to_thread(self._validate_output, temporary_path, duration)
+            temporary_path.replace(final_path)
+        except (FFmpegExecutionError, OSError, ClipExtractionError) as error:
+            temporary_path.unlink(missing_ok=True)
+            if isinstance(error, ClipExtractionError):
+                raise
+            raise ClipExtractionError(str(error)) from error
+
+    def _cleanup_expired_previews(self) -> None:
+        cutoff = time.monotonic() - PREVIEW_TTL_SECONDS
+        with self._preview_lock:
+            expired = [
+                preview_id
+                for preview_id, artifact in self._previews.items()
+                if artifact.created_monotonic < cutoff or not artifact.path.is_file()
+            ]
+            artifacts = [self._previews.pop(preview_id) for preview_id in expired]
+        for artifact in artifacts:
+            artifact.path.unlink(missing_ok=True)
 
     async def _extract_with_fallback(
         self,

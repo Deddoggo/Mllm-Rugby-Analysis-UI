@@ -72,9 +72,9 @@ data/
 
 ## On-demand clip extraction
 
-Clips are extracted only when the user previews a selected event or submits a
-question. `POST /videos/{video_id}/clips` accepts an `event_id` and optional
-`force`; authoritative boundaries always come from `EventRepository`.
+Persistent clips are extracted only for analysis/question submission.
+`POST /videos/{video_id}/clips` accepts an `event_id` and optional `force`;
+authoritative boundaries always come from `EventRepository`.
 
 The stable cache identity is SHA256 over the video ID, event ID, boundaries
 rounded to three decimals, and `accurate-h264-v1` profile. Unchanged boundaries
@@ -87,8 +87,19 @@ re-encoding. It prefers `h264_nvenc -preset p4`, falls back to
 uses `yuv420p`, and writes fast-start MP4 output. Temporary files are validated
 with FFprobe and atomically finalized before `clips.json` is updated.
 
+Preview extraction is deliberately separate. `POST
+/videos/{video_id}/clips/preview` writes a validated MP4 into a process-temporary
+directory, registers no `ClipRecord`, and never reads or writes `clips.json`.
+The frontend deletes the temporary resource when the preview closes or its
+event context changes. The backend also lazily expires abandoned previews after
+one hour when the preview service is accessed, and its temporary directory is
+removed when the process exits.
+
 ```http
 POST /videos/{video_id}/clips
+POST /videos/{video_id}/clips/preview
+GET  /videos/{video_id}/clips/preview/{preview_id}/stream
+DELETE /videos/{video_id}/clips/preview/{preview_id}
 GET  /videos/{video_id}/clips
 GET  /videos/{video_id}/clips/{clip_id}
 GET  /videos/{video_id}/clips/{clip_id}/stream

@@ -55,6 +55,19 @@ export interface EventClip {
   cached: boolean;
 }
 
+export interface TemporaryClipPreview {
+  previewId: string;
+  videoId: string;
+  eventId: string;
+  eventLabel: string;
+  start: number;
+  end: number;
+  duration: number;
+  status: "ready";
+  streamUrl: string;
+  temporary: true;
+}
+
 export interface AnalysisResponse {
   id: string;
   answer: string;
@@ -132,6 +145,23 @@ export const clipListResponseSchema = z.object({
 });
 
 export type ApiClip = z.infer<typeof apiClipSchema>;
+
+export const apiClipPreviewSchema = z.object({
+  preview_id: z.string().min(1),
+  video_id: z.string().min(1),
+  event_id: z.string().min(1),
+  event_label: z.string().min(1),
+  start: z.number().nonnegative(),
+  end: z.number().positive(),
+  duration: z.number().min(2).max(60),
+  status: z.literal("ready"),
+  stream_url: z.string().min(1),
+  temporary: z.literal(true),
+}).refine((clip) => clip.end > clip.start, {
+  message: "Clip preview end must be after start",
+});
+
+export type ApiClipPreview = z.infer<typeof apiClipPreviewSchema>;
 
 export const analysisResponseSchema = z.object({
   id: z.string(),

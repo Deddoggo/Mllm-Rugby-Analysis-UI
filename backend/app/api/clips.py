@@ -1,9 +1,10 @@
 """HTTP endpoints for lazy event clip extraction and playback."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.responses import FileResponse
 
 from app.schemas.clip import ClipCreateRequest, ClipCreateResponse, ClipListResponse, ClipRecord
+from app.schemas.clip_preview import ClipPreviewRequest, ClipPreviewResponse
 from app.services.clip_extraction import (
     ClipEventNotFoundError,
     ClipExtractionError,
@@ -55,6 +56,42 @@ async def create_clip(video_id: str, request: ClipCreateRequest) -> ClipCreateRe
     except Exception as error:
         raise_clip_http_error(error)
         raise
+
+
+@router.post(
+    "/{video_id}/clips/preview",
+    response_model=ClipPreviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_clip_preview(
+    video_id: str,
+    request: ClipPreviewRequest,
+) -> ClipPreviewResponse:
+    try:
+        return await clip_extraction_service.create_preview(video_id, request.event_id)
+    except Exception as error:
+        raise_clip_http_error(error)
+        raise
+
+
+@router.get(
+    "/{video_id}/clips/preview/{preview_id}/stream",
+    response_class=FileResponse,
+)
+async def stream_clip_preview(video_id: str, preview_id: str) -> FileResponse:
+    artifact = clip_extraction_service.get_preview(video_id, preview_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Clip preview not found.")
+    return media_file_response(artifact.path, "video/mp4")
+
+
+@router.delete(
+    "/{video_id}/clips/preview/{preview_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_clip_preview(video_id: str, preview_id: str) -> Response:
+    clip_extraction_service.delete_preview(video_id, preview_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{video_id}/clips", response_model=ClipListResponse)
