@@ -1,6 +1,7 @@
 "use client";
 
-import { Bell, ChevronRight, Command, Home, Search, Settings } from "lucide-react";
+import { Bell, ChevronRight, Command, Home, Search } from "lucide-react";
+import { AnalysisSettingsPanel } from "@/components/settings/analysis-settings-panel";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export function AppTopbar({
@@ -46,7 +47,7 @@ export function AppTopbar({
         <span className="status-pill loaded"><i /> {eventStatus}</span>
         <span className="status-pill offline"><i /> {apiMode ? "AI service" : "AI offline"}</span>
         <button className="icon-button" aria-label="Notifications"><Bell size={17} /></button>
-        <button className="icon-button hide-tablet" aria-label="Settings"><Settings size={17} /></button>
+        <AnalysisSettingsPanel />
         <span className="avatar" aria-label="Analyst profile">AT</span>
       </div>
     </header>
