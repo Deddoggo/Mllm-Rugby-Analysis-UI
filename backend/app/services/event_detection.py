@@ -67,6 +67,18 @@ class EventDetectionService:
         if metadata.duration is None or metadata.duration <= 0:
             raise InvalidDetectorOutputError("Video duration is unavailable or invalid.")
         video_path = self._resolve_video_path(metadata.processed_path)
+
+        print(
+            "EVENT DEBUG:",
+            {
+                "video_id": video_id,
+                "stored_path": metadata.processed_path,
+                "resolved_path": str(video_path),
+                "exists": video_path.exists(),
+                "is_file": video_path.is_file(),
+            },
+        )
+
         if not video_path.is_file():
             raise VideoNotReadyError("Processed video file is unavailable.")
 
