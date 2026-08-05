@@ -16,7 +16,12 @@ from app.schemas.analysis import (
     ConversationHistoryResponse,
     ProviderMetadata,
 )
-from app.services.ai_client import AIServiceClient, AIServiceUnavailableError
+from app.services.ai_client import (
+    AIServiceClient,
+    AIServiceProtocolError,
+    AIServiceUnavailableError,
+    DEFAULT_AI_SERVICE_TIMEOUT_SECONDS,
+)
 
 
 VIDEO_ID = "match_20260803_abcd1234"
@@ -47,6 +52,11 @@ class FakeClipRepository:
 
 
 class AIServiceClientTests(unittest.TestCase):
+    def test_default_timeout_outlasts_qwen_provider_timeout(self) -> None:
+        client = AIServiceClient(base_url="http://ai.test")
+        self.assertEqual(client.timeout_seconds, DEFAULT_AI_SERVICE_TIMEOUT_SECONDS)
+        self.assertGreater(client.timeout_seconds, 120)
+
     def test_mock_ai_service_response_is_typed(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.path, "/analysis/query")
@@ -79,6 +89,28 @@ class AIServiceClientTests(unittest.TestCase):
         self.assertEqual(response.conversation_id, "conv_001")
         self.assertEqual(response.confidence, "limited")
 
+    def test_schema_mismatch_is_reported_as_protocol_error(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={
+                "answer": "Valid answer with incomplete envelope.",
+                "provider": "qwen:qwen3.7-flash",
+                "turn_number": "not-an-integer",
+            })
+
+        client = AIServiceClient(
+            base_url="http://ai.test",
+            transport=httpx.MockTransport(handler),
+        )
+        with self.assertLogs("app.services.ai_client", level="ERROR") as logs:
+            with self.assertRaises(AIServiceProtocolError):
+                asyncio.run(client.analyze(AIServiceAnalysisRequest(
+                    video_id=VIDEO_ID,
+                    event_id=EVENT_ID,
+                    clip_id=CLIP_ID,
+                    question="Explain this scrum phase",
+                )))
+        self.assertIn("response validation failed", "\n".join(logs.output))
+
     def test_retrieves_conversation_history(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(
@@ -107,6 +139,50 @@ class AIServiceClientTests(unittest.TestCase):
 
 
 class AnalysisGatewayTests(unittest.TestCase):
+    def test_forwards_complete_multi_turn_qwen_response(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.url.path, "/analysis/query")
+            return httpx.Response(200, json={
+                "answer": "France retained possession after the reset.",
+                "provider": "qwen:qwen3.7-flash",
+                "provider_metadata": {
+                    "id": "qwen",
+                    "display_name": "Qwen API",
+                    "model": "qwen3.7-flash",
+                },
+                "conversation_id": "conv_qwen_001",
+                "turn_number": 2,
+                "confidence": "limited",
+                "metadata": {
+                    "context_used": {
+                        "video": {"video_id": VIDEO_ID},
+                        "event": {"label": "Scrum"},
+                        "clip": {"clip_id": CLIP_ID},
+                    },
+                },
+            })
+
+        client = AIServiceClient(
+            base_url="http://ai.test",
+            transport=httpx.MockTransport(handler),
+        )
+        with (
+            patch("app.api.analysis.metadata_service", FakeMetadataService()),
+            patch("app.api.analysis.clip_repository", FakeClipRepository()),
+            patch("app.api.analysis.ai_client", client),
+        ):
+            response = asyncio.run(analyze_clip(
+                VIDEO_ID,
+                CLIP_ID,
+                AnalysisQuestionRequest(question="Why did they retain possession?"),
+            ))
+
+        self.assertEqual(response.conversation_id, "conv_qwen_001")
+        self.assertEqual(response.turn_number, 2)
+        self.assertEqual(response.provider, "qwen:qwen3.7-flash")
+        self.assertEqual(response.provider_metadata.display_name, "Qwen API")
+        self.assertEqual(response.provider_metadata.model, "qwen3.7-flash")
+
     def test_forwards_authoritative_clip_metadata(self) -> None:
         expected = AnalysisGatewayResponse(
             answer="This is a scrum phase.",

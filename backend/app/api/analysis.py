@@ -1,5 +1,7 @@
 """Validated analysis gateway from persistent clips to the AI service."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.analysis import (
@@ -17,6 +19,7 @@ from app.services.clip_repository import ClipRepository
 from app.services.video_metadata import VideoMetadataService
 
 
+LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/videos", tags=["analysis"])
 metadata_service = VideoMetadataService()
 clip_repository = ClipRepository()
@@ -54,8 +57,19 @@ async def analyze_clip(
             question=request.question,
         ))
     except AIServiceUnavailableError as error:
+        LOGGER.exception(
+            "Analysis gateway could not reach AI service: video_id=%s clip_id=%s",
+            video_id,
+            clip_id,
+        )
         raise HTTPException(status_code=503, detail=str(error)) from error
     except AIServiceProtocolError as error:
+        LOGGER.exception(
+            "Analysis gateway received an invalid AI service response: "
+            "video_id=%s clip_id=%s",
+            video_id,
+            clip_id,
+        )
         raise HTTPException(status_code=502, detail=str(error)) from error
 
 
@@ -88,6 +102,18 @@ async def get_clip_conversation(
             clip.clip_id,
         )
     except AIServiceUnavailableError as error:
+        LOGGER.exception(
+            "Conversation gateway could not reach AI service: "
+            "video_id=%s clip_id=%s",
+            video_id,
+            clip_id,
+        )
         raise HTTPException(status_code=503, detail=str(error)) from error
     except AIServiceProtocolError as error:
+        LOGGER.exception(
+            "Conversation gateway received an invalid AI service response: "
+            "video_id=%s clip_id=%s",
+            video_id,
+            clip_id,
+        )
         raise HTTPException(status_code=502, detail=str(error)) from error

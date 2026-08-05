@@ -1,5 +1,7 @@
 """Async HTTP client for the independent Rugby Intelligence AI service."""
 
+import logging
+
 import httpx
 from pydantic import ValidationError
 
@@ -9,6 +11,10 @@ from app.schemas.analysis import (
     AnalysisGatewayResponse,
     ConversationHistoryResponse,
 )
+
+
+LOGGER = logging.getLogger(__name__)
+DEFAULT_AI_SERVICE_TIMEOUT_SECONDS = 150.0
 
 
 class AIServiceUnavailableError(ConnectionError):
@@ -25,7 +31,7 @@ class AIServiceClient:
     def __init__(
         self,
         base_url: str = AI_SERVICE_URL,
-        timeout_seconds: float = 30.0,
+        timeout_seconds: float = DEFAULT_AI_SERVICE_TIMEOUT_SECONDS,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
@@ -61,12 +67,42 @@ class AIServiceClient:
                 transport=self.transport,
             ) as client:
                 response = await client.request(method, path, **kwargs)
+        except httpx.TimeoutException as error:
+            LOGGER.exception(
+                "AI service request timed out: method=%s path=%s timeout_seconds=%s",
+                method,
+                path,
+                self.timeout_seconds,
+            )
+            raise AIServiceUnavailableError(
+                "AI service timed out while processing the analysis request."
+            ) from error
         except httpx.RequestError as error:
+            LOGGER.exception(
+                "AI service request failed: method=%s path=%s error_type=%s",
+                method,
+                path,
+                type(error).__name__,
+            )
             raise AIServiceUnavailableError("AI service is unavailable.") from error
 
         if response.status_code >= 500:
+            LOGGER.error(
+                "AI service provider failed: method=%s path=%s status=%s body=%s",
+                method,
+                path,
+                response.status_code,
+                response.text[:2_000],
+            )
             raise AIServiceProtocolError("AI service provider failed.")
         if not response.is_success:
+            LOGGER.error(
+                "AI service rejected request: method=%s path=%s status=%s body=%s",
+                method,
+                path,
+                response.status_code,
+                response.text[:2_000],
+            )
             raise AIServiceProtocolError(
                 f"AI service rejected the analysis request ({response.status_code})."
             )
@@ -77,4 +113,10 @@ class AIServiceClient:
         try:
             return schema.model_validate(response.json())
         except (ValueError, ValidationError) as error:
+            LOGGER.exception(
+                "AI service response validation failed: schema=%s status=%s body=%s",
+                schema.__name__,
+                response.status_code,
+                response.text[:2_000],
+            )
             raise AIServiceProtocolError("AI service returned an invalid response.") from error
