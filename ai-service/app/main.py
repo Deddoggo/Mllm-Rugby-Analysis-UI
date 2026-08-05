@@ -16,7 +16,15 @@ logger = logging.getLogger("uvicorn.error")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    model = settings.qwen_model if settings.vlm_provider == "qwen" else "mock-rugby-vlm"
+    vlm_identity = (
+        f"qwen:{settings.qwen_model}"
+        if settings.vlm_provider == "qwen"
+        else "mock-rugby-vlm"
+    )
+    detector_identity = (
+        "mock-vjepa2" if settings.event_detector_provider == "mock"
+        else settings.event_detector_provider
+    )
     routes = sorted({
         *(route.path for route in analysis_router.routes),
         *(route.path for route in events_router.routes),
@@ -28,12 +36,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         for route in events_router.routes
     )
     logger.info(
-        "AI service starting host=%s port=%s provider=%s model=%s "
+        "AI service starting host=%s port=%s event_detector=%s vlm_provider=%s "
         "event_detection_available=%s routes=%s",
         settings.host,
         settings.port,
-        settings.vlm_provider,
-        model,
+        detector_identity,
+        vlm_identity,
         event_detection_available,
         ",".join(routes),
     )

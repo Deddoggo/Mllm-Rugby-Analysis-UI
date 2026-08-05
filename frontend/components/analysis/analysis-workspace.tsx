@@ -31,6 +31,7 @@ import { ClipPreview } from "./clip-preview";
 import type { ClipPreviewStatus } from "./clip-preview";
 
 export function AnalysisWorkspace() {
+  const apiMode = (process.env.NEXT_PUBLIC_DATA_MODE ?? "api") === "api";
   const videoPanelRef = useRef<VideoPanelHandle>(null);
   const events = useWorkspaceStore((state) => state.events);
   const currentVideo = useWorkspaceStore((state) => state.currentVideo);
@@ -73,7 +74,7 @@ export function AnalysisWorkspace() {
   const query = useQuery({
     queryKey: ["events", "demo-toulouse-asm"],
     queryFn: () => services.events.getEvents("demo-toulouse-asm"),
-    enabled: currentVideo === null,
+    enabled: !apiMode && currentVideo === null,
   });
 
   useEffect(() => {
@@ -366,9 +367,9 @@ export function AnalysisWorkspace() {
 
       <VideoUpload />
 
-      {!currentVideo && query.isLoading && <div className="state-card"><span className="spinner" /> Preparing event intelligence…</div>}
-      {!currentVideo && query.isError && <div className="state-card error">Event data is invalid or unavailable. <button onClick={() => query.refetch()}>Retry</button></div>}
-      {!currentVideo && !query.isLoading && !query.isError && events.length === 0 && <div className="state-card">No event proposals were found for this match.</div>}
+      {!apiMode && !currentVideo && query.isLoading && <div className="state-card"><span className="spinner" /> Preparing event intelligence…</div>}
+      {!apiMode && !currentVideo && query.isError && <div className="state-card error">Event data is invalid or unavailable. <button onClick={() => query.refetch()}>Retry</button></div>}
+      {!apiMode && !currentVideo && !query.isLoading && !query.isError && events.length === 0 && <div className="state-card">No event proposals were found for this match.</div>}
       {currentVideo && eventDetectionStatus === "detecting" && <div className="state-card"><span className="spinner" /> Detecting rugby event proposals...</div>}
       {currentVideo && eventDetectionStatus === "error" && (
         <div className="state-card error">
@@ -378,20 +379,19 @@ export function AnalysisWorkspace() {
       )}
       {currentVideo && eventDetectionStatus === "ready" && events.length === 0 && <div className="state-card">No event proposals were found for this match.</div>}
 
-      {(currentVideo || events.length > 0) && (
-        <div className="video-wrap">
-          <VideoPanel
-            ref={videoPanelRef}
-            current={current}
-            onTime={setCurrent}
-            onDuration={observeDuration}
-            selected={selected}
-            previewSignal={0}
-            video={currentVideo}
-            detectionStatus={eventDetectionStatus}
-          />
-        </div>
-      )}
+      <div className="video-wrap">
+        <VideoPanel
+          ref={videoPanelRef}
+          current={current}
+          onTime={setCurrent}
+          onDuration={observeDuration}
+          selected={selected}
+          previewSignal={0}
+          video={currentVideo}
+          detectionStatus={eventDetectionStatus}
+          showPlaceholder={!currentVideo}
+        />
+      </div>
 
       {events.length > 0 && (
         <>

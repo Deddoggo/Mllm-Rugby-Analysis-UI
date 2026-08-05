@@ -32,7 +32,21 @@ pnpm build
 
 Copy `.env.example` to `.env.local` if you want to change defaults.
 
-## Demo mode
+## API mode (default)
+
+The frontend defaults to `NEXT_PUBLIC_DATA_MODE=api`. Before a match is
+uploaded it renders the existing video placeholder and upload area without
+requesting demo events or calling event detection. Event APIs are used only
+after a successful upload supplies a valid `video_id`.
+
+```env
+NEXT_PUBLIC_DATA_MODE=api
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_ENABLE_MOCK_ERRORS=false
+NEXT_PUBLIC_MEDIA_DEBUG=false
+```
+
+## Optional demo mode
 
 The precomputed proposals live at `public/demo/events.json`. Add your own local broadcast clip as:
 
@@ -42,12 +56,8 @@ public/demo/match.mp4
 
 The application deliberately does not include a large video. Without it, the polished placeholder, events, boundary editing, and mock analysis remain usable.
 
-```env
-NEXT_PUBLIC_DATA_MODE=mock
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_ENABLE_MOCK_ERRORS=false
-NEXT_PUBLIC_MEDIA_DEBUG=false
-```
+Set `NEXT_PUBLIC_DATA_MODE=mock` explicitly to use the bundled demo event
+repository during isolated frontend development.
 
 Set `NEXT_PUBLIC_MEDIA_DEBUG=true` only while diagnosing playback. It enables
 concise media lifecycle, source, pause, and programmatic-seek diagnostics in
@@ -57,9 +67,7 @@ Clipless demo analysis waits briefly, responds according to the selected event
 label, identifies itself as `mock-rugby-vlm`, and explicitly notes that visual
 inference is simulated.
 
-## API mode
-
-Set `NEXT_PUBLIC_DATA_MODE=api`. The visual application remains unchanged; the factory selects the API repositories. Prepared contracts expect:
+The API repositories expect:
 
 ```http
 POST /videos/upload

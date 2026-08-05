@@ -94,6 +94,23 @@ describe("video and timeline synchronization", () => {
     playSpy.mockRestore();
   });
 
+  it("shows the empty match placeholder without requesting demo media in API mode", () => {
+    render(
+      <VideoPanel
+        current={0}
+        onTime={noop}
+        onDuration={noop}
+        previewSignal={0}
+        video={null}
+        detectionStatus="idle"
+        showPlaceholder
+      />,
+    );
+
+    expect(screen.getByText("Add match.mp4 to begin video review")).toBeTruthy();
+    expect(screen.getByTestId("match-video").getAttribute("src")).toBeNull();
+  });
+
   it("timeline click invokes the player seek contract and visual time follows media events", () => {
     const requests = vi.fn();
     render(<SyncedHarness onSeekRequest={requests} />);

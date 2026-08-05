@@ -35,5 +35,6 @@ describe("service factory", () => {
   it("switches repository implementations without changing UI contracts", () => {
     expect(createServices("mock").analysis.constructor.name).toBe("ClipAwareAnalysisService");
     expect(createServices("api").analysis.constructor.name).toBe("ApiAnalysisService");
+    expect(createServices().analysis.constructor.name).toBe("ApiAnalysisService");
   });
 });

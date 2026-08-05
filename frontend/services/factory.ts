@@ -24,7 +24,7 @@ export interface Services {
 }
 
 export function createServices(
-  mode = process.env.NEXT_PUBLIC_DATA_MODE ?? "mock",
+  mode = process.env.NEXT_PUBLIC_DATA_MODE ?? "api",
 ): Services {
   if (mode === "api") {
     return {

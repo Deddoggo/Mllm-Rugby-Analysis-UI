@@ -203,3 +203,10 @@ at `http://localhost:9000/health` and `http://localhost:9000/docs`.
 Compose mounts the shared `data/` directory at `/app/data` in both Python
 services. The backend reaches AI functionality exclusively over HTTP at
 `http://ai-service:9000`; it does not import AI-service or V-JEPA2 modules.
+
+Copy the root `.env.example` to `.env` and set `QWEN_API_KEY` before starting
+Compose. The key is injected into the AI-service container at runtime and is
+not copied into any image. The Compose runtime intentionally uses two separate
+providers: `mock-vjepa2` for temporary event proposals and
+`qwen:qwen3.7-flash` for video questions. Local AI-service development still
+defaults to the mock VLM when `VLM_PROVIDER` is unset.

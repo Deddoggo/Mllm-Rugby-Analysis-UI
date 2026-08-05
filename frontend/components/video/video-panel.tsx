@@ -26,6 +26,7 @@ interface VideoPanelProps {
   previewSignal: number;
   video?: VideoAsset | null;
   detectionStatus: EventDetectionStatus;
+  showPlaceholder?: boolean;
 }
 
 export const VideoPanel = forwardRef<VideoPanelHandle, VideoPanelProps>(function VideoPanel({
@@ -34,10 +35,11 @@ export const VideoPanel = forwardRef<VideoPanelHandle, VideoPanelProps>(function
   selected,
   previewSignal,
   video,
+  showPlaceholder = false,
 }, forwardedRef) {
   const playerRef = useRef<VideoPlayerHandle>(null);
   const selectedRef = useRef(selected);
-  const source = video?.url ?? "/demo/match.mp4";
+  const source = video?.url ?? (showPlaceholder ? "" : "/demo/match.mp4");
   selectedRef.current = selected;
 
   const seekTo = useCallback((seconds: number) => {
@@ -69,6 +71,7 @@ export const VideoPanel = forwardRef<VideoPanelHandle, VideoPanelProps>(function
         variant="match"
         onTimeChange={onTime}
         onDurationChange={onDuration}
+        showFallback={showPlaceholder}
         fallback={(
           <div className="video-missing">
             <span className="missing-kicker">{video ? "Video unavailable" : "Demo video placeholder"}</span>

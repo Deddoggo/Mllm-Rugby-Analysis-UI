@@ -74,14 +74,17 @@ def test_health_endpoint() -> None:
 
 
 def test_startup_logs_provider_and_model_without_api_key(caplog) -> None:
-    expected_model = (
-        settings.qwen_model if settings.vlm_provider == "qwen" else "mock-rugby-vlm"
+    expected_vlm = (
+        f"qwen:{settings.qwen_model}"
+        if settings.vlm_provider == "qwen"
+        else "mock-rugby-vlm"
     )
     with caplog.at_level(logging.INFO, logger="uvicorn.error"):
         with TestClient(app):
             pass
     assert f"host={settings.host} port={settings.port}" in caplog.text
-    assert f"provider={settings.vlm_provider} model={expected_model}" in caplog.text
+    assert "event_detector=mock-vjepa2" in caplog.text
+    assert f"vlm_provider={expected_vlm}" in caplog.text
     assert "event_detection_available=True" in caplog.text
     assert "/analysis/events/detect" in caplog.text
     if settings.qwen_api_key:

@@ -145,6 +145,8 @@ Configuration:
 - `AI_SERVICE_PORT` defaults to `9000`.
 - `RUGBY_DATA_DIR` optionally overrides the repository `data/` directory used
   for read-only context lookup.
+- `EVENT_DETECTOR_PROVIDER` selects event detection independently from the VLM
+  provider. It currently supports `mock`, implemented by `mock-vjepa2`.
 - `VLM_PROVIDER` selects `mock` or `qwen` and defaults to `mock`.
 - `VLM_REQUEST_TIMEOUT` controls external API timeout seconds and defaults to
   `120`.
@@ -166,7 +168,7 @@ configuration error and does not silently send the request to another service.
 ```env
 VLM_PROVIDER=qwen
 QWEN_API_KEY=replace-me
-QWEN_MODEL=qwen3.7-plus
+QWEN_MODEL=qwen3.7-flash
 QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 ```
 

@@ -31,6 +31,7 @@ export interface VideoPlayerProps {
   onTimeChange?: (time: number) => void;
   onDurationChange?: (duration: number) => void;
   fallback?: ReactNode;
+  showFallback?: boolean;
   children?: ReactNode;
 }
 
@@ -46,6 +47,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   onTimeChange,
   onDurationChange,
   fallback,
+  showFallback = false,
   children,
 }, forwardedRef) {
   const playerRef = useRef<HTMLDivElement>(null);
@@ -138,7 +140,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       <video
         ref={videoRef}
         data-testid={variant === "match" ? "match-video" : "clip-preview-video"}
-        src={src}
+        src={src || undefined}
         preload="metadata"
         muted={muted}
         aria-label={title}
@@ -160,7 +162,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         onSeeked={(event) => observeTime(event.currentTarget.currentTime)}
         onTimeUpdate={(event) => observeTime(event.currentTarget.currentTime)}
       />
-      {missing && fallback}
+      {(showFallback || missing) && fallback}
       {children}
       <div className="video-controls">
         <input

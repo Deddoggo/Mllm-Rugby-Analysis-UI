@@ -34,6 +34,10 @@ services:
       AI_SERVICE_HOST: 0.0.0.0
       AI_SERVICE_PORT: "9000"
       RUGBY_DATA_DIR: /app/data
-      VLM_PROVIDER: mock
+      EVENT_DETECTOR_PROVIDER: mock
+      VLM_PROVIDER: qwen
+      QWEN_API_KEY: ${QWEN_API_KEY}
+      QWEN_MODEL: qwen3.7-flash
+      QWEN_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
     volumes:
       - ./data:/app/data

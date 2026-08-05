@@ -29,11 +29,25 @@ def test_default_provider_falls_back_to_mock(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_process_environment_overrides_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EVENT_DETECTOR_PROVIDER", "mock")
     monkeypatch.setenv("VLM_PROVIDER", "qwen")
     monkeypatch.setenv("QWEN_MODEL", "qwen3.7-flash")
     configured = load_settings()
     assert configured.vlm_provider == "qwen"
     assert configured.qwen_model == "qwen3.7-flash"
+    assert configured.event_detector_provider == "mock"
+
+
+def test_event_detector_is_independent_from_vlm_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EVENT_DETECTOR_PROVIDER", "mock")
+    monkeypatch.setenv("VLM_PROVIDER", "qwen")
+
+    configured = load_settings()
+
+    assert configured.event_detector_provider == "mock"
+    assert configured.vlm_provider == "qwen"
 
 
 def test_qwen_provider_selection() -> None:
