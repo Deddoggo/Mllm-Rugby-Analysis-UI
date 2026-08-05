@@ -25,6 +25,7 @@ import { useTheme } from "next-themes";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AppScrollArea } from "@/components/ui/app-scroll-area";
+import { useAnalysisSettingsStore } from "@/stores/settings-store";
 
 type NavigationItem = [LucideIcon, string, boolean?];
 
@@ -61,6 +62,7 @@ export function AppSidebar() {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
+  const openSettings = useAnalysisSettingsStore((state) => state.openSettings);
 
   const toggleTheme = () => setTheme(resolvedTheme === "dark" ? "light" : "dark");
 
@@ -116,7 +118,15 @@ export function AppSidebar() {
                   <span className="theme-icon theme-icon-moon"><Moon size={16} /></span>
                   <span className="theme-icon theme-icon-sun"><Sun size={16} /></span>
                 </button>
-                <button aria-label="Settings"><Settings size={16} /></button>
+                <button
+                  aria-label="Analysis settings from sidebar"
+                  onClick={() => {
+                    openSettings();
+                    setOpen(false);
+                  }}
+                >
+                  <Settings size={16} />
+                </button>
               </>
             )}
           </div>

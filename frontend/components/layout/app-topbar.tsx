@@ -1,7 +1,7 @@
 "use client";
 
-import { Bell, ChevronRight, Command, Home, Search } from "lucide-react";
-import { AnalysisSettingsPanel } from "@/components/settings/analysis-settings-panel";
+import { Bell, ChevronRight, Command, Home, Search, Settings } from "lucide-react";
+import { useAnalysisSettingsStore } from "@/stores/settings-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 export function AppTopbar({
@@ -14,6 +14,8 @@ export function AppTopbar({
   const apiMode = (process.env.NEXT_PUBLIC_DATA_MODE ?? "api") === "api";
   const currentVideo = useWorkspaceStore((state) => state.currentVideo);
   const detectionStatus = useWorkspaceStore((state) => state.eventDetectionStatus);
+  const settingsOpen = useAnalysisSettingsStore((state) => state.isOpen);
+  const openSettings = useAnalysisSettingsStore((state) => state.openSettings);
   const eventStatus = !currentVideo
     ? "Awaiting upload"
     : detectionStatus === "detecting"
@@ -47,7 +49,16 @@ export function AppTopbar({
         <span className="status-pill loaded"><i /> {eventStatus}</span>
         <span className="status-pill offline"><i /> {apiMode ? "AI service" : "AI offline"}</span>
         <button className="icon-button" aria-label="Notifications"><Bell size={17} /></button>
-        <AnalysisSettingsPanel />
+        <button
+          type="button"
+          className={`icon-button${settingsOpen ? " active" : ""}`}
+          aria-label="Analysis settings"
+          aria-expanded={settingsOpen}
+          aria-controls="analysis-settings-panel"
+          onClick={openSettings}
+        >
+          <Settings size={17} />
+        </button>
         <span className="avatar" aria-label="Analyst profile">AT</span>
       </div>
     </header>

@@ -2,6 +2,7 @@
 
 import { AppSidebar } from "./app-sidebar";
 import { AppTopbar } from "./app-topbar";
+import { SettingsPanel } from "@/components/settings/settings-panel";
 
 export function AppShell({
   children,
@@ -19,6 +20,7 @@ export function AppShell({
         <AppTopbar search={search} onSearch={onSearch} />
         <main className="workspace">{children}</main>
       </div>
+      <SettingsPanel />
     </div>
   );
 }

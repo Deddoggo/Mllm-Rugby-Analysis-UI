@@ -19,6 +19,7 @@ import {
 import { createClip, detectEvents, updateEventBoundaries } from "@/services/api";
 import { services } from "@/services/factory";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useAnalysisSettingsStore } from "@/stores/settings-store";
 import { AppShell } from "@/components/layout/app-shell";
 import { VideoPanel } from "@/components/video/video-panel";
 import type { VideoPanelHandle } from "@/components/video/video-panel";
@@ -53,6 +54,7 @@ export function AnalysisWorkspace() {
   const setAvailableClips = useWorkspaceStore((state) => state.setAvailableClips);
   const detectEventsForVideo = useWorkspaceStore((state) => state.detectEventsForVideo);
   const setClipState = useWorkspaceStore((state) => state.setClipState);
+  const setActiveVlmFromAnalysis = useAnalysisSettingsStore((state) => state.setActiveVlmFromAnalysis);
   const [search, setSearch] = useState("");
   const [current, setCurrent] = useState(0);
   const [observedDuration, setObservedDuration] = useState({ sourceId: "demo", value: 300 });
@@ -311,6 +313,7 @@ export function AnalysisWorkspace() {
         mode: answerMode,
       };
       const response = await services.analysis.analyze(request);
+      setActiveVlmFromAnalysis(response.model, response.providerLabel);
       if (response.conversationId) {
         setConversationId(conversationKey, response.conversationId);
       }
@@ -329,7 +332,7 @@ export function AnalysisWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [selected, addMessages, answerMode, currentVideo, ensureClip, loadConversation, setConversationId]);
+  }, [selected, addMessages, answerMode, currentVideo, ensureClip, loadConversation, setActiveVlmFromAnalysis, setConversationId]);
 
   const clearSelectedConversation = useCallback(async () => {
     if (!currentVideo || !selectedClip) return;
