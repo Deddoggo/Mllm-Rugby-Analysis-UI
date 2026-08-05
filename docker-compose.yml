@@ -1,0 +1,39 @@
+services:
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_DATA_MODE: api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      AI_SERVICE_URL: http://ai-service:9000
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - ai-service
+
+
+  ai-service:
+    build:
+      context: ./ai-service
+    ports:
+      - "9000:9000"
+    environment:
+      AI_SERVICE_HOST: 0.0.0.0
+      AI_SERVICE_PORT: "9000"
+      RUGBY_DATA_DIR: /app/data
+      VLM_PROVIDER: mock
+    volumes:
+      - ./data:/app/data

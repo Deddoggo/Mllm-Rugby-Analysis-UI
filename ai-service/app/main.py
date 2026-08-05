@@ -11,16 +11,31 @@ from app.api.events import router as events_router
 from app.core.config import settings
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     model = settings.qwen_model if settings.vlm_provider == "qwen" else "mock-rugby-vlm"
+    routes = sorted({
+        *(route.path for route in analysis_router.routes),
+        *(route.path for route in events_router.routes),
+        "/health",
+    })
+    event_detection_available = any(
+        route.path == "/analysis/events/detect"
+        and "POST" in (route.methods or set())
+        for route in events_router.routes
+    )
     logger.info(
-        "AI service starting with VLM provider=%s model=%s",
+        "AI service starting host=%s port=%s provider=%s model=%s "
+        "event_detection_available=%s routes=%s",
+        settings.host,
+        settings.port,
         settings.vlm_provider,
         model,
+        event_detection_available,
+        ",".join(routes),
     )
     yield
 

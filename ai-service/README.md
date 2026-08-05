@@ -142,7 +142,7 @@ the service after changing `.env`.
 Configuration:
 
 - `AI_SERVICE_HOST` defaults to `127.0.0.1`.
-- `AI_SERVICE_PORT` defaults to `8100`.
+- `AI_SERVICE_PORT` defaults to `9000`.
 - `RUGBY_DATA_DIR` optionally overrides the repository `data/` directory used
   for read-only context lookup.
 - `VLM_PROVIDER` selects `mock` or `qwen` and defaults to `mock`.

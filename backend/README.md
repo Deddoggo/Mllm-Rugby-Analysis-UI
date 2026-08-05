@@ -165,7 +165,8 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 `AI_SERVICE_URL` configures the downstream service and defaults to
-`http://localhost:8100`. The analysis gateway validates the video and persistent
+`http://localhost:9000`. In Compose it is set to
+`http://ai-service:9000`. The analysis gateway validates the video and persistent
 clip locally, derives the event ID from authoritative clip metadata, and then
 calls `POST /analysis/query`. Connection failures return HTTP 503; missing clips
 return HTTP 404.

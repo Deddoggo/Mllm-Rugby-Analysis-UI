@@ -77,12 +77,13 @@ def test_startup_logs_provider_and_model_without_api_key(caplog) -> None:
     expected_model = (
         settings.qwen_model if settings.vlm_provider == "qwen" else "mock-rugby-vlm"
     )
-    with caplog.at_level(logging.INFO, logger="app.main"):
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
         with TestClient(app):
             pass
-    assert (
-        f"VLM provider={settings.vlm_provider} model={expected_model}" in caplog.text
-    )
+    assert f"host={settings.host} port={settings.port}" in caplog.text
+    assert f"provider={settings.vlm_provider} model={expected_model}" in caplog.text
+    assert "event_detection_available=True" in caplog.text
+    assert "/analysis/events/detect" in caplog.text
     if settings.qwen_api_key:
         assert settings.qwen_api_key not in caplog.text
 

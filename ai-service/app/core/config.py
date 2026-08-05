@@ -33,7 +33,7 @@ def load_settings() -> Settings:
     repository_root = Path(__file__).resolve().parents[3]
     data_dir = Path(os.getenv("RUGBY_DATA_DIR", repository_root / "data")).resolve()
     try:
-        port = int(os.getenv("AI_SERVICE_PORT", "8100"))
+        port = int(os.getenv("AI_SERVICE_PORT", "9000"))
     except ValueError as error:
         raise RuntimeError("AI_SERVICE_PORT must be an integer.") from error
     if not 1 <= port <= 65535:

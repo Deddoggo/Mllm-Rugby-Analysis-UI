@@ -181,6 +181,25 @@ conda activate rugby-ai
 python -m app.main
 ```
 
-The backend reads `AI_SERVICE_URL`, defaulting to `http://localhost:8100`. The AI
+The backend reads `AI_SERVICE_URL`, defaulting to `http://localhost:9000`. The AI
 service reads `AI_SERVICE_HOST` and `AI_SERVICE_PORT`, defaulting to
-`127.0.0.1:8100`.
+`127.0.0.1:9000`. Docker Compose uses the internal URL
+`http://ai-service:9000` and binds the AI service to `0.0.0.0:9000`.
+
+## Docker Compose
+
+Build and start the complete local stack from the repository root:
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+The frontend is available at `http://localhost:3000`, the backend health check
+at `http://localhost:8000/health`, and the AI-service API at
+`http://localhost:9000`. Its health check and OpenAPI documentation are exposed
+at `http://localhost:9000/health` and `http://localhost:9000/docs`.
+
+Compose mounts the shared `data/` directory at `/app/data` in both Python
+services. The backend reaches AI functionality exclusively over HTTP at
+`http://ai-service:9000`; it does not import AI-service or V-JEPA2 modules.
