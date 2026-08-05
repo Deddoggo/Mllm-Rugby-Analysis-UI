@@ -26,6 +26,7 @@ owned by their existing layers.
 GET  /health
 POST /analysis/query
 GET  /analysis/conversations/{video_id}/{event_id}/{clip_id}
+DELETE /analysis/conversations/{video_id}/{event_id}/{clip_id}
 ```
 
 Example analysis request:
@@ -92,6 +93,12 @@ user/assistant messages. Before each analysis request, prior messages are loaded
 and supplied through the provider-neutral `VLMRequest.history`. A completed user
 question and assistant answer are then written atomically. Different clips never
 share history, and no database is required for the current milestone.
+
+Analysis requests accept `mode: "detailed" | "concise"`, defaulting to
+`detailed`. The mode selects provider-neutral style guidance and is stored in
+each assistant message's optional `metadata.mode`; legacy messages without this
+field remain valid. Conversation deletion is idempotent and removes only this
+JSON history file, never its event, clip metadata, or media.
 
 Qwen sends the base64 `video_url`, structured rugby context, and question on the
 first turn. Later turns send only sanitized user/assistant text history and the

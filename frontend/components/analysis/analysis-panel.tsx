@@ -3,17 +3,17 @@
 import {
   ArrowUp,
   Check,
-  ChevronDown,
   Clipboard,
   Database,
   Film,
   LoaderCircle,
   RefreshCw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 import { useState } from "react";
-import type { ChatMessage, VideoEvent } from "@/lib/domain";
+import type { AnswerMode, ChatMessage, VideoEvent } from "@/lib/domain";
 import { formatTime } from "@/lib/time";
 
 const prompts = [
@@ -28,6 +28,11 @@ export function AnalysisPanel({
   loading,
   preparingClip,
   error,
+  mode,
+  onModeChange,
+  canClearConversation,
+  clearingConversation,
+  onClearConversation,
   onSubmit,
   onRetry,
 }: {
@@ -36,6 +41,11 @@ export function AnalysisPanel({
   loading: boolean;
   preparingClip: boolean;
   error: string | null;
+  mode: AnswerMode;
+  onModeChange: (mode: AnswerMode) => void;
+  canClearConversation: boolean;
+  clearingConversation: boolean;
+  onClearConversation: () => void;
   onSubmit: (question: string) => void;
   onRetry: () => void;
 }) {
@@ -52,6 +62,17 @@ export function AnalysisPanel({
 
   return (
     <section className="analysis-panel">
+      <header className="analysis-panel-toolbar">
+        <strong>Video Q&amp;A</strong>
+        <button
+          type="button"
+          onClick={onClearConversation}
+          disabled={!canClearConversation || clearingConversation || loading}
+        >
+          <Trash2 size={13} />
+          {clearingConversation ? "Clearing…" : "Clear conversation"}
+        </button>
+      </header>
       {messages.length === 0 && !loading ? (
         <div className="analysis-empty">
           <div className="analysis-ball" aria-hidden="true"><span /><i /><b /></div>
@@ -109,7 +130,18 @@ export function AnalysisPanel({
             <button><Film size={14} /> Selected clip</button>
             <button><Database size={14} /> Event metadata</button>
             <button>Rugby knowledge <span className="toggle on" /></button>
-            <button>Concise answer <ChevronDown size={13} /></button>
+            <label className="answer-mode-control">
+              <span>Answer style</span>
+              <select
+                aria-label="Answer style"
+                value={mode}
+                onChange={(event) => onModeChange(event.target.value as AnswerMode)}
+                disabled={loading}
+              >
+                <option value="detailed">Detailed</option>
+                <option value="concise">Concise</option>
+              </select>
+            </label>
           </div>
           <span className="mock-label">{providerStatus ?? "VLM provider pending"}</span>
           <button className="send-button" onClick={submit} disabled={!selected || !question.trim() || loading} aria-label={loading ? "Analysis in progress" : "Send question"}>

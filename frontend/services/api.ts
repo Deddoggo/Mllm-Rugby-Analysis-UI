@@ -17,6 +17,7 @@ import {
   apiClipPreviewSchema,
   clipListResponseSchema,
   conversationHistoryResponseSchema,
+  conversationDeleteResponseSchema,
 } from "@/lib/domain";
 import type {
   AnalysisService,
@@ -334,7 +335,10 @@ export class ApiAnalysisService implements AnalysisService {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: request.question }),
+        body: JSON.stringify({
+          question: request.question,
+          mode: request.mode ?? "detailed",
+        }),
       },
     );
     if (!response.ok) {
@@ -374,7 +378,22 @@ export class ApiAnalysisService implements AnalysisService {
       providerLabel: message.provider_metadata
         ? formatProviderLabel(message.provider_metadata, message.provider ?? "")
         : message.provider ?? undefined,
+      mode: message.metadata?.mode,
     }));
+  }
+
+  async deleteConversation(videoId: string, clipId: string): Promise<void> {
+    const response = await fetch(
+      `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/clips/${encodeURIComponent(clipId)}/analysis`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      throw new Error(await apiErrorMessage(
+        response,
+        `Conversation deletion failed (${response.status}).`,
+      ));
+    }
+    conversationDeleteResponseSchema.parse(await response.json());
   }
 }
 

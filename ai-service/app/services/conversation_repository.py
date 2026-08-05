@@ -12,7 +12,9 @@ from pydantic import ValidationError
 
 from app.core.config import settings
 from app.schemas.analysis import (
+    AnswerMode,
     ConversationMessage,
+    ConversationMessageMetadata,
     ConversationRecord,
     ProviderMetadata,
 )
@@ -71,6 +73,7 @@ class ConversationRepository:
         answer: str,
         provider: str,
         provider_metadata: ProviderMetadata,
+        mode: AnswerMode = "detailed",
     ) -> ConversationRecord:
         with self._lock:
             conversation = self.get(video_id, event_id, clip_id)
@@ -94,11 +97,30 @@ class ConversationRepository:
                     content=answer,
                     provider=provider,
                     provider_metadata=provider_metadata,
+                    metadata=ConversationMessageMetadata(mode=mode),
                     created_at=datetime.now(timezone.utc),
                 ),
             ])
             self._write_atomic(self._path(video_id, clip_id), conversation)
             return conversation
+
+    def delete(self, video_id: str, event_id: str, clip_id: str) -> bool:
+        """Delete only the selected clip's conversation; missing files are success."""
+        self._validate_id(event_id)
+        path = self._path(video_id, clip_id)
+        with self._lock:
+            if not path.exists():
+                return False
+            conversation = self.get(video_id, event_id, clip_id)
+            if conversation is None:
+                return False
+            try:
+                path.unlink()
+            except OSError as error:
+                raise ConversationRepositoryError(
+                    "Conversation history could not be deleted."
+                ) from error
+            return True
 
     def empty(
         self,

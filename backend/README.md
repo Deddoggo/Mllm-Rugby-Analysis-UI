@@ -12,6 +12,7 @@ This directory contains the FastAPI service for Rugby Intelligence.
 - `PATCH /videos/{video_id}/events/{event_id}` persisted boundary adjustment;
 - `POST /videos/{video_id}/clips/{clip_id}/analysis` validated AI-service gateway;
 - `GET /videos/{video_id}/clips/{clip_id}/analysis` persisted conversation history;
+- `DELETE /videos/{video_id}/clips/{clip_id}/analysis` idempotent conversation clearing;
 - streamed local storage in the repository's `data/videos/` directory;
 - SHA256 duplicate detection with stable video IDs;
 - JSON video metadata in `data/metadata/videos.json`;
@@ -172,6 +173,9 @@ The same analysis path supports `GET` to retrieve the selected clip's persisted
 multi-turn conversation. Conversation storage remains owned by the AI service;
 the backend validates authoritative video/clip/event metadata and forwards both
 operations without maintaining a second history store.
+POST requests accept an optional `mode` of `detailed` (the default) or
+`concise`. DELETE validates the same authoritative clip and removes only its AI
+service conversation record.
 
 Run the AI service separately before asking questions about uploaded clips:
 

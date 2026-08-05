@@ -9,6 +9,8 @@ import pytest
 
 from app.core.config import load_settings, settings
 from app.vlm.api_vlm import (
+    CONCISE_ANSWER_INSTRUCTION,
+    DETAILED_ANSWER_INSTRUCTION,
     RUGBY_ANALYST_INSTRUCTION,
     VLMAPIError,
     VLMConfigurationError,
@@ -115,7 +117,8 @@ def test_qwen_video_payload_authentication_and_response_parsing(tmp_path: Path) 
     payload = captured["payload"]
     assert isinstance(payload, dict)
     assert payload["model"] == "qwen3.7-plus"
-    assert payload["messages"][0]["content"] == RUGBY_ANALYST_INSTRUCTION
+    assert RUGBY_ANALYST_INSTRUCTION in payload["messages"][0]["content"]
+    assert DETAILED_ANSWER_INSTRUCTION in payload["messages"][0]["content"]
     content = payload["messages"][1]["content"]
     assert [item["type"] for item in content] == ["video_url", "text"]
     video_item, text_item = content
@@ -163,6 +166,44 @@ def test_qwen_follow_up_sanitizes_history_and_does_not_resend_video(
     assert "video_url" not in json.dumps(payload)
     assert "provider_metadata" not in json.dumps(payload)
     assert "created_at" not in json.dumps(payload)
+
+
+def test_qwen_concise_prompt_contains_style_instruction(tmp_path: Path) -> None:
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"mock-video-bytes")
+    provider = QwenVLM(
+        api_key="secret-key",
+        model="qwen3.7-flash",
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    )
+    payload = provider.build_payload(VLMRequest(
+        str(clip),
+        "Summarize this phase",
+        {},
+        mode="concise",
+    ))
+    instruction = payload["messages"][0]["content"]
+    assert CONCISE_ANSWER_INSTRUCTION in instruction
+    assert DETAILED_ANSWER_INSTRUCTION not in instruction
+
+
+def test_qwen_detailed_prompt_contains_style_instruction(tmp_path: Path) -> None:
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"mock-video-bytes")
+    provider = QwenVLM(
+        api_key="secret-key",
+        model="qwen3.7-flash",
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    )
+    payload = provider.build_payload(VLMRequest(
+        str(clip),
+        "Explain this phase",
+        {},
+        mode="detailed",
+    ))
+    instruction = payload["messages"][0]["content"]
+    assert DETAILED_ANSWER_INSTRUCTION in instruction
+    assert CONCISE_ANSWER_INSTRUCTION not in instruction
 
 
 def test_qwen_oversized_video_is_not_reencoded_for_follow_up(tmp_path: Path) -> None:

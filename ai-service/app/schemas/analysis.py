@@ -6,6 +6,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+AnswerMode = Literal["concise", "detailed"]
+
+
 class AnalysisQueryRequest(BaseModel):
     """Identifiers and natural-language question for one prepared event clip."""
 
@@ -13,6 +16,7 @@ class AnalysisQueryRequest(BaseModel):
     event_id: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_-]+$")
     clip_id: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_-]+$")
     question: str = Field(min_length=1, max_length=4000)
+    mode: AnswerMode = "detailed"
 
 
 class AnalysisContextUsed(BaseModel):
@@ -37,6 +41,12 @@ class ProviderMetadata(BaseModel):
     model: str | None = None
 
 
+class ConversationMessageMetadata(BaseModel):
+    """Optional per-turn settings; absent in conversations created before modes."""
+
+    mode: AnswerMode = "detailed"
+
+
 class ConversationMessage(BaseModel):
     """One persisted user or assistant conversation message."""
 
@@ -44,6 +54,7 @@ class ConversationMessage(BaseModel):
     content: str = Field(min_length=1)
     provider: str | None = None
     provider_metadata: ProviderMetadata | None = None
+    metadata: ConversationMessageMetadata | None = None
     created_at: datetime
 
 
@@ -59,6 +70,12 @@ class ConversationRecord(BaseModel):
 
 class ConversationHistoryResponse(ConversationRecord):
     """Conversation returned to the backend and frontend."""
+
+
+class ConversationDeleteResponse(BaseModel):
+    """Idempotent conversation deletion result."""
+
+    deleted: Literal[True] = True
 
 
 class AnalysisQueryResponse(BaseModel):

@@ -4,6 +4,7 @@ import { Eye, Plus, RotateCcw, ShieldCheck, SlidersHorizontal } from "lucide-rea
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AnswerMode,
   AnalysisRequest,
   ChatMessage,
   EventClip,
@@ -46,6 +47,8 @@ export function AnalysisWorkspace() {
   const resetBounds = useWorkspaceStore((state) => state.resetBounds);
   const addMessages = useWorkspaceStore((state) => state.addMessages);
   const setMessages = useWorkspaceStore((state) => state.setMessages);
+  const setConversationId = useWorkspaceStore((state) => state.setConversationId);
+  const clearConversation = useWorkspaceStore((state) => state.clearConversation);
   const setAvailableClips = useWorkspaceStore((state) => state.setAvailableClips);
   const detectEventsForVideo = useWorkspaceStore((state) => state.detectEventsForVideo);
   const setClipState = useWorkspaceStore((state) => state.setClipState);
@@ -62,6 +65,8 @@ export function AnalysisWorkspace() {
   const indexedClipVideoRef = useRef<string | null>(null);
   const conversationLoadsRef = useRef(new Map<string, Promise<ChatMessage[]>>());
   const [loading, setLoading] = useState(false);
+  const [clearingConversation, setClearingConversation] = useState(false);
+  const [answerMode, setAnswerMode] = useState<AnswerMode>("detailed");
   const [error, setError] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState("");
   const [boundaryError, setBoundaryError] = useState<string | null>(null);
@@ -302,8 +307,12 @@ export function AnalysisWorkspace() {
         eventLabel: selected.label,
         question,
         clipId: clip?.clipId,
+        mode: answerMode,
       };
       const response = await services.analysis.analyze(request);
+      if (response.conversationId) {
+        setConversationId(conversationKey, response.conversationId);
+      }
       addMessages(conversationKey, [{
         id: response.id,
         role: "assistant",
@@ -311,6 +320,7 @@ export function AnalysisWorkspace() {
         createdAt: response.createdAt,
         model: response.model,
         providerLabel: response.providerLabel,
+        mode: answerMode,
         processingTime: response.processingTime,
       }]);
     } catch (caught) {
@@ -318,7 +328,24 @@ export function AnalysisWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [selected, addMessages, currentVideo, ensureClip, loadConversation]);
+  }, [selected, addMessages, answerMode, currentVideo, ensureClip, loadConversation, setConversationId]);
+
+  const clearSelectedConversation = useCallback(async () => {
+    if (!currentVideo || !selectedClip) return;
+    if (!window.confirm("Clear this clip's conversation history?")) return;
+    setClearingConversation(true);
+    setError(null);
+    try {
+      await services.analysis.deleteConversation(currentVideo.id, selectedClip.clipId);
+      clearConversation(selectedClip.clipId);
+      conversationLoadsRef.current.delete(selectedClip.clipId);
+      setLastQuestion("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Conversation deletion failed.");
+    } finally {
+      setClearingConversation(false);
+    }
+  }, [clearConversation, currentVideo, selectedClip]);
 
   const selectedConversationKey = selected
     ? currentVideo
@@ -411,6 +438,16 @@ export function AnalysisWorkspace() {
             loading={loading}
             preparingClip={clipStatus === "extracting"}
             error={error}
+            mode={answerMode}
+            onModeChange={setAnswerMode}
+            canClearConversation={Boolean(
+              currentVideo
+              && selectedClip
+              && selectedConversationKey
+              && (chats[selectedConversationKey]?.length ?? 0) > 0
+            )}
+            clearingConversation={clearingConversation}
+            onClearConversation={() => void clearSelectedConversation()}
             onSubmit={ask}
             onRetry={() => lastQuestion && ask(lastQuestion)}
           />

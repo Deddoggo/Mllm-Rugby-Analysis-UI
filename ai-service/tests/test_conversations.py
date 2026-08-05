@@ -1,5 +1,6 @@
 """Clip-scoped conversation persistence and multi-turn orchestration tests."""
 
+import json
 from pathlib import Path
 
 from app.schemas.analysis import AnalysisQueryRequest
@@ -34,12 +35,17 @@ class CapturingVLM(VLMInterface):
         return f"Answer {len(self.requests)}"
 
 
-def make_request(clip_id: str, question: str) -> AnalysisQueryRequest:
+def make_request(
+    clip_id: str,
+    question: str,
+    mode: str = "detailed",
+) -> AnalysisQueryRequest:
     return AnalysisQueryRequest(
         video_id=VIDEO_ID,
         event_id=EVENT_ID,
         clip_id=clip_id,
         question=question,
+        mode=mode,
     )
 
 
@@ -52,7 +58,7 @@ def test_create_append_and_retrieve_conversation(tmp_path: Path) -> None:
         conversation_repository=repository,
     )
 
-    first = service.analyze(make_request("clip_one", "Who won this scrum?"))
+    first = service.analyze(make_request("clip_one", "Who won this scrum?", "concise"))
     second = service.analyze(make_request("clip_one", "Why?"))
     history = service.get_conversation(VIDEO_ID, EVENT_ID, "clip_one")
 
@@ -62,6 +68,7 @@ def test_create_append_and_retrieve_conversation(tmp_path: Path) -> None:
     assert second.provider_metadata.display_name == "Qwen API"
     assert second.provider_metadata.model == "qwen3.7-flash"
     assert provider.requests[0].history == []
+    assert provider.requests[0].mode == "concise"
     assert provider.requests[1].history == [
         {"role": "user", "content": "Who won this scrum?"},
         {"role": "assistant", "content": "Answer 1"},
@@ -73,6 +80,8 @@ def test_create_append_and_retrieve_conversation(tmp_path: Path) -> None:
         "Answer 2",
     ]
     assert (tmp_path / "conversations" / VIDEO_ID / "clip_one.json").is_file()
+    assert history.messages[1].metadata.mode == "concise"
+    assert history.messages[3].metadata.mode == "detailed"
 
 
 def test_different_clips_use_separate_conversations(tmp_path: Path) -> None:
@@ -91,3 +100,44 @@ def test_different_clips_use_separate_conversations(tmp_path: Path) -> None:
     assert service.get_conversation(VIDEO_ID, EVENT_ID, "clip_two").messages[0].content == (
         "Second clip question"
     )
+
+
+def test_delete_existing_and_missing_conversation_is_idempotent(tmp_path: Path) -> None:
+    repository = ConversationRepository(tmp_path / "conversations")
+    service = AnalysisService(
+        vlm=CapturingVLM(),
+        context_builder=StubContextBuilder(),
+        conversation_repository=repository,
+    )
+    service.analyze(make_request("clip_one", "What happened?"))
+    path = tmp_path / "conversations" / VIDEO_ID / "clip_one.json"
+    assert path.is_file()
+
+    assert service.delete_conversation(VIDEO_ID, EVENT_ID, "clip_one").deleted is True
+    assert not path.exists()
+    assert service.delete_conversation(VIDEO_ID, EVENT_ID, "clip_one").deleted is True
+
+
+def test_old_conversation_without_message_metadata_still_loads(tmp_path: Path) -> None:
+    path = tmp_path / "conversations" / VIDEO_ID / "clip_one.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({
+        "conversation_id": "conv_legacy",
+        "video_id": VIDEO_ID,
+        "event_id": EVENT_ID,
+        "clip_id": "clip_one",
+        "messages": [{
+            "role": "assistant",
+            "content": "Legacy answer",
+            "provider": "mock-rugby-vlm",
+            "created_at": "2026-08-05T12:00:00Z",
+        }],
+    }), encoding="utf-8")
+
+    conversation = ConversationRepository(tmp_path / "conversations").get(
+        VIDEO_ID,
+        EVENT_ID,
+        "clip_one",
+    )
+    assert conversation is not None
+    assert conversation.messages[0].metadata is None

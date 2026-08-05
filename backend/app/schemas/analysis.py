@@ -5,10 +5,14 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+AnswerMode = Literal["concise", "detailed"]
+
+
 class AnalysisQuestionRequest(BaseModel):
     """Question submitted for an already prepared persistent clip."""
 
     question: str = Field(min_length=1, max_length=4000)
+    mode: AnswerMode = "detailed"
 
     @field_validator("question")
     @classmethod
@@ -26,6 +30,7 @@ class AIServiceAnalysisRequest(BaseModel):
     event_id: str
     clip_id: str
     question: str
+    mode: AnswerMode = "detailed"
 
 
 class ProviderMetadata(BaseModel):
@@ -43,6 +48,7 @@ class ConversationMessage(BaseModel):
     content: str
     provider: str | None = None
     provider_metadata: ProviderMetadata | None = None
+    metadata: dict[str, Any] | None = None
     created_at: str
 
 
@@ -54,6 +60,12 @@ class ConversationHistoryResponse(BaseModel):
     event_id: str
     clip_id: str
     messages: list[ConversationMessage] = Field(default_factory=list)
+
+
+class ConversationDeleteResponse(BaseModel):
+    """Idempotent conversation deletion result."""
+
+    deleted: Literal[True]
 
 
 class AnalysisGatewayResponse(BaseModel):

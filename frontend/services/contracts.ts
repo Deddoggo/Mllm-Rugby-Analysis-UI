@@ -21,6 +21,7 @@ export interface EventRepository {
 export interface AnalysisService {
   analyze(request: AnalysisRequest): Promise<AnalysisResponse>;
   getConversation(videoId: string, clipId: string): Promise<ChatMessage[]>;
+  deleteConversation(videoId: string, clipId: string): Promise<void>;
 }
 
 export interface ClipRepository {

@@ -9,6 +9,7 @@ from app.schemas.analysis import (
     AnalysisQueryRequest,
     AnalysisQueryResponse,
     ConversationHistoryResponse,
+    ConversationDeleteResponse,
     ProviderMetadata,
 )
 from app.services.conversation_repository import ConversationRepository
@@ -58,6 +59,7 @@ class AnalysisService:
                 question=request.question,
                 context=context,
                 history=history,
+                mode=request.mode,
             ))
         except Exception as error:
             LOGGER.exception("VLM provider %s failed: %s", self.vlm.name, error)
@@ -71,6 +73,7 @@ class AnalysisService:
             answer=answer,
             provider=self.vlm.name,
             provider_metadata=provider_metadata,
+            mode=request.mode,
         )
         return AnalysisQueryResponse(
             answer=answer,
@@ -100,6 +103,15 @@ class AnalysisService:
         if conversation is None:
             conversation = self.conversation_repository.empty(video_id, event_id, clip_id)
         return ConversationHistoryResponse.model_validate(conversation.model_dump())
+
+    def delete_conversation(
+        self,
+        video_id: str,
+        event_id: str,
+        clip_id: str,
+    ) -> ConversationDeleteResponse:
+        self.conversation_repository.delete(video_id, event_id, clip_id)
+        return ConversationDeleteResponse(deleted=True)
 
 
 def describe_provider(provider: str) -> ProviderMetadata:

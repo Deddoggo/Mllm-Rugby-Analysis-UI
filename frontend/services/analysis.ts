@@ -17,4 +17,8 @@ export class ClipAwareAnalysisService implements AnalysisService {
   getConversation(videoId: string, clipId: string) {
     return this.clipService.getConversation(videoId, clipId);
   }
+
+  deleteConversation(videoId: string, clipId: string) {
+    return this.clipService.deleteConversation(videoId, clipId);
+  }
 }

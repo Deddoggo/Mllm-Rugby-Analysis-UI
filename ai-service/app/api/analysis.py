@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.schemas.analysis import (
     AnalysisQueryRequest,
     AnalysisQueryResponse,
+    ConversationDeleteResponse,
     ConversationHistoryResponse,
 )
 from app.services.analysis_service import AnalysisProviderError, AnalysisService
@@ -42,3 +43,16 @@ def get_conversation(
     service: AnalysisService = Depends(get_analysis_service),
 ) -> ConversationHistoryResponse:
     return service.get_conversation(video_id, event_id, clip_id)
+
+
+@router.delete(
+    "/conversations/{video_id}/{event_id}/{clip_id}",
+    response_model=ConversationDeleteResponse,
+)
+def delete_conversation(
+    video_id: str,
+    event_id: str,
+    clip_id: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ConversationDeleteResponse:
+    return service.delete_conversation(video_id, event_id, clip_id)

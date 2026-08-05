@@ -18,6 +18,7 @@ describe("workspace store", () => {
     events: [],
     selectedId: null,
     chats: {},
+    conversationIds: {},
     eventDetectionStatus: "idle",
     eventDetectionError: null,
     selectedClip: null,
@@ -156,5 +157,37 @@ describe("workspace store", () => {
     expect(useWorkspaceStore.getState().selectedClip?.clipId).toBe("clip_one");
     expect(useWorkspaceStore.getState().chats.clip_one[0].content).toBe("First conversation");
     expect(useWorkspaceStore.getState().chats.clip_two[0].content).toBe("Second conversation");
+  });
+
+  it("clears one conversation while preserving the selected clip", () => {
+    const clip: EventClip = {
+      clipId: "clip_one",
+      videoId: "match_20260803_abcd1234",
+      eventId: event.id,
+      eventLabel: event.label,
+      start: event.start,
+      end: event.end,
+      duration: event.end - event.start,
+      status: "ready",
+      streamUrl: "http://backend.test/clip-one.mp4",
+      extractionProfile: "accurate-h264-v1",
+      createdAt: "2026-08-05T12:00:00Z",
+      cached: true,
+    };
+    useWorkspaceStore.getState().setEvents([event]);
+    useWorkspaceStore.getState().setClipState("ready", clip);
+    useWorkspaceStore.getState().setMessages(clip.clipId, [{
+      id: "message_1",
+      role: "assistant",
+      content: "Answer",
+      createdAt: "2026-08-05T12:00:00Z",
+    }]);
+    useWorkspaceStore.getState().setConversationId(clip.clipId, "conv_001");
+
+    useWorkspaceStore.getState().clearConversation(clip.clipId);
+
+    expect(useWorkspaceStore.getState().chats[clip.clipId]).toBeUndefined();
+    expect(useWorkspaceStore.getState().conversationIds[clip.clipId]).toBeUndefined();
+    expect(useWorkspaceStore.getState().selectedClip).toEqual(clip);
   });
 });

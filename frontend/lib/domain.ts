@@ -9,6 +9,7 @@ export const eventLabelSchema = z.enum([
 ]);
 
 export type EventLabel = z.infer<typeof eventLabelSchema>;
+export type AnswerMode = "concise" | "detailed";
 
 export interface VideoAsset {
   id: string;
@@ -38,6 +39,7 @@ export interface AnalysisRequest {
   eventLabel: EventLabel;
   question: string;
   clipId?: string;
+  mode?: AnswerMode;
 }
 
 export interface EventClip {
@@ -86,6 +88,7 @@ export interface ChatMessage {
   createdAt: string;
   model?: string;
   providerLabel?: string;
+  mode?: AnswerMode;
   processingTime?: number;
 }
 
@@ -206,6 +209,13 @@ export const conversationHistoryResponseSchema = z.object({
       display_name: z.string().min(1),
       model: z.string().nullable().optional(),
     }).nullable().optional(),
+    metadata: z.object({
+      mode: z.enum(["concise", "detailed"]).default("detailed"),
+    }).nullable().optional(),
     created_at: z.string().min(1),
   })),
+});
+
+export const conversationDeleteResponseSchema = z.object({
+  deleted: z.literal(true),
 });

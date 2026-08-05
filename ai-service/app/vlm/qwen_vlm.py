@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from app.vlm.api_vlm import APIVLM, RUGBY_ANALYST_INSTRUCTION, VLMAPIError
+from app.vlm.api_vlm import APIVLM, VLMAPIError, build_system_instruction
 from app.vlm.interface import VLMRequest
 
 
@@ -54,7 +54,7 @@ class QwenVLM(APIVLM):
         return {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": RUGBY_ANALYST_INSTRUCTION},
+                {"role": "system", "content": build_system_instruction(request)},
                 *history,
                 current_message,
             ],

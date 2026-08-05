@@ -67,6 +67,7 @@ POST /videos/{videoId}/events/detect
 GET /videos/{videoId}/events
 POST /videos/{videoId}/clips
 POST /videos/{videoId}/clips/{clipId}/analysis
+DELETE /videos/{videoId}/clips/{clipId}/analysis
 ```
 
 Zod validates all external event and analysis responses.
@@ -91,6 +92,10 @@ The matching `GET` endpoint restores prior turns. Real-video chats are keyed by
 persistent clip ID, so changing events or adjusted boundaries cannot mix
 conversation context. Existing cached clips are indexed read-only and never
 created merely by selecting an event.
+
+The composer exposes Detailed and Concise answer styles. Clearing a conversation
+requires confirmation, removes the selected clip's persisted and local messages,
+and deliberately keeps the selected event and extracted clip unchanged.
 
 Provider status is rendered from AI-service response metadata rather than UI
 name mappings. Examples include `Mock VLM` and

@@ -9,6 +9,7 @@ interface WorkspaceState {
   currentVideo: VideoAsset | null;
   selectedId: string | null;
   chats: Record<string, ChatMessage[]>;
+  conversationIds: Record<string, string>;
   eventDetectionStatus: EventDetectionStatus;
   eventDetectionError: string | null;
   selectedClip: EventClip | null;
@@ -23,6 +24,8 @@ interface WorkspaceState {
   resetBounds: (id: string) => void;
   addMessages: (id: string, messages: ChatMessage[]) => void;
   setMessages: (id: string, messages: ChatMessage[]) => void;
+  setConversationId: (id: string, conversationId: string) => void;
+  clearConversation: (id: string) => void;
   setAvailableClips: (clips: EventClip[]) => void;
   setEventDetection: (status: EventDetectionStatus, error?: string | null) => void;
   setClipState: (status: ClipStatus, clip?: EventClip | null, error?: string | null) => void;
@@ -38,6 +41,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   currentVideo: null,
   selectedId: null,
   chats: {},
+  conversationIds: {},
   eventDetectionStatus: "idle",
   eventDetectionError: null,
   selectedClip: null,
@@ -45,13 +49,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   clipStatus: "idle",
   clipError: null,
   setEvents: (events) =>
-    set({ events, selectedId: events[0]?.id ?? null, chats: {}, selectedClip: null, clipsByEvent: {}, clipStatus: "idle", clipError: null }),
+    set({ events, selectedId: events[0]?.id ?? null, chats: {}, conversationIds: {}, selectedClip: null, clipsByEvent: {}, clipStatus: "idle", clipError: null }),
   setCurrentVideo: (currentVideo) =>
     set({
       currentVideo,
       events: [],
       selectedId: null,
       chats: {},
+      conversationIds: {},
       eventDetectionStatus: "idle",
       eventDetectionError: null,
       selectedClip: null,
@@ -127,6 +132,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     })),
   setMessages: (id, messages) =>
     set((state) => ({ chats: { ...state.chats, [id]: messages } })),
+  setConversationId: (id, conversationId) =>
+    set((state) => ({
+      conversationIds: { ...state.conversationIds, [id]: conversationId },
+    })),
+  clearConversation: (id) =>
+    set((state) => ({
+      chats: omitKey(state.chats, id),
+      conversationIds: omitKey(state.conversationIds, id),
+    })),
   setAvailableClips: (clips) =>
     set((state) => {
       const clipsByEvent = clips.reduce<Record<string, EventClip>>((result, clip) => {
@@ -168,6 +182,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         events,
         selectedId: events[0]?.id ?? null,
         chats: {},
+        conversationIds: {},
         eventDetectionStatus: "ready",
         eventDetectionError: null,
         selectedClip: null,
@@ -186,6 +201,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     selectedId: null,
     events: [],
     chats: {},
+    conversationIds: {},
     eventDetectionStatus: "idle",
     eventDetectionError: null,
     selectedClip: null,

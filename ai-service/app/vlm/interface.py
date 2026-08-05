@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.schemas.analysis import AnswerMode
+
 
 @dataclass(frozen=True)
 class VLMRequest:
@@ -13,6 +15,7 @@ class VLMRequest:
     question: str
     context: dict[str, Any]
     history: list[dict[str, str]] = field(default_factory=list)
+    mode: AnswerMode = "detailed"
 
 
 class VLMInterface(ABC):

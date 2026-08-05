@@ -8,6 +8,7 @@ from app.schemas.analysis import (
     AIServiceAnalysisRequest,
     AnalysisGatewayResponse,
     AnalysisQuestionRequest,
+    ConversationDeleteResponse,
     ConversationHistoryResponse,
 )
 from app.services.ai_client import (
@@ -55,6 +56,7 @@ async def analyze_clip(
             event_id=clip.event_id,
             clip_id=clip.clip_id,
             question=request.question,
+            mode=request.mode,
         ))
     except AIServiceUnavailableError as error:
         LOGGER.exception(
@@ -112,6 +114,52 @@ async def get_clip_conversation(
     except AIServiceProtocolError as error:
         LOGGER.exception(
             "Conversation gateway received an invalid AI service response: "
+            "video_id=%s clip_id=%s",
+            video_id,
+            clip_id,
+        )
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@router.delete(
+    "/{video_id}/clips/{clip_id}/analysis",
+    response_model=ConversationDeleteResponse,
+)
+async def delete_clip_conversation(
+    video_id: str,
+    clip_id: str,
+) -> ConversationDeleteResponse:
+    try:
+        video = metadata_service.get_by_id(video_id)
+    except RuntimeError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found.")
+
+    try:
+        clip = clip_repository.get_clip(video_id, clip_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail="Clip not found.") from error
+    if clip is None:
+        raise HTTPException(status_code=404, detail="Clip not found.")
+
+    try:
+        return await ai_client.delete_conversation(
+            video.video_id,
+            clip.event_id,
+            clip.clip_id,
+        )
+    except AIServiceUnavailableError as error:
+        LOGGER.exception(
+            "Conversation deletion could not reach AI service: "
+            "video_id=%s clip_id=%s",
+            video_id,
+            clip_id,
+        )
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except AIServiceProtocolError as error:
+        LOGGER.exception(
+            "Conversation deletion received an invalid AI service response: "
             "video_id=%s clip_id=%s",
             video_id,
             clip_id,

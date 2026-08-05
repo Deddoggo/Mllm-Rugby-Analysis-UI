@@ -9,6 +9,7 @@ from app.core.config import AI_SERVICE_URL
 from app.schemas.analysis import (
     AIServiceAnalysisRequest,
     AnalysisGatewayResponse,
+    ConversationDeleteResponse,
     ConversationHistoryResponse,
 )
 
@@ -53,6 +54,18 @@ class AIServiceClient:
             f"/analysis/conversations/{video_id}/{event_id}/{clip_id}",
         )
         return self._validate_response(response, ConversationHistoryResponse)
+
+    async def delete_conversation(
+        self,
+        video_id: str,
+        event_id: str,
+        clip_id: str,
+    ) -> ConversationDeleteResponse:
+        response = await self._request(
+            "DELETE",
+            f"/analysis/conversations/{video_id}/{event_id}/{clip_id}",
+        )
+        return self._validate_response(response, ConversationDeleteResponse)
 
     async def _request(
         self,

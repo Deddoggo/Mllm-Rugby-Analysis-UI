@@ -25,7 +25,7 @@ describe("backend analysis gateway", () => {
     vi.unstubAllGlobals();
   });
 
-  it("sends only the question to the prepared-clip backend endpoint", async () => {
+  it("sends the selected answer mode to the prepared-clip backend endpoint", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       answer: "This is a scrum phase.",
       provider: "mock-rugby-vlm",
@@ -41,13 +41,13 @@ describe("backend analysis gateway", () => {
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const response = await new ApiAnalysisService().analyze(request);
+    const response = await new ApiAnalysisService().analyze({ ...request, mode: "concise" });
 
     expect(fetchMock).toHaveBeenCalledWith(
       `http://backend.test/videos/${request.videoId}/clips/${request.clipId}/analysis`,
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ question: request.question }),
+        body: JSON.stringify({ question: request.question, mode: "concise" }),
       }),
     );
     expect(response.answer).toBe("This is a scrum phase.");
@@ -77,6 +77,7 @@ describe("backend analysis gateway", () => {
             display_name: "Qwen API",
             model: "qwen3.7-flash",
           },
+          metadata: { mode: "concise" },
           created_at: "2026-08-05T12:00:01Z",
         },
       ],
@@ -93,7 +94,23 @@ describe("backend analysis gateway", () => {
       role: "assistant",
       content: "The blue team appears to win it.",
       providerLabel: "Qwen API · qwen3.7-flash",
+      mode: "concise",
     });
+  });
+
+  it("deletes conversation history without deleting the clip", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ deleted: true }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new ApiAnalysisService().deleteConversation(request.videoId, request.clipId!);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `http://backend.test/videos/${request.videoId}/clips/${request.clipId}/analysis`,
+      { method: "DELETE" },
+    );
   });
 
   it("routes prepared clips to the gateway and clipless demos to the mock", async () => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnalysisPanel } from "@/components/analysis/analysis-panel";
 import type { ChatMessage, VideoEvent } from "@/lib/domain";
@@ -57,6 +57,11 @@ describe("conversation analysis panel", () => {
         loading={false}
         preparingClip={false}
         error={null}
+        mode="detailed"
+        onModeChange={vi.fn()}
+        canClearConversation
+        clearingConversation={false}
+        onClearConversation={vi.fn()}
         onSubmit={vi.fn()}
         onRetry={vi.fn()}
       />,
@@ -74,6 +79,11 @@ describe("conversation analysis panel", () => {
         loading={false}
         preparingClip={false}
         error={null}
+        mode="detailed"
+        onModeChange={vi.fn()}
+        canClearConversation
+        clearingConversation={false}
+        onClearConversation={vi.fn()}
         onSubmit={vi.fn()}
         onRetry={vi.fn()}
       />,
@@ -85,11 +95,43 @@ describe("conversation analysis panel", () => {
         loading={false}
         preparingClip={false}
         error={null}
+        mode="detailed"
+        onModeChange={vi.fn()}
+        canClearConversation={false}
+        clearingConversation={false}
+        onClearConversation={vi.fn()}
         onSubmit={vi.fn()}
         onRetry={vi.fn()}
       />,
     );
     expect(screen.queryByText("Who won this scrum?")).toBeNull();
     expect(screen.getByText("How can I help analyze this phase?")).toBeTruthy();
+  });
+
+  it("changes answer mode and exposes conversation deletion", () => {
+    const onModeChange = vi.fn();
+    const onClearConversation = vi.fn();
+    render(
+      <AnalysisPanel
+        selected={selected}
+        messages={messages}
+        loading={false}
+        preparingClip={false}
+        error={null}
+        mode="detailed"
+        onModeChange={onModeChange}
+        canClearConversation
+        clearingConversation={false}
+        onClearConversation={onClearConversation}
+        onSubmit={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Answer style" }), {
+      target: { value: "concise" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Clear conversation" }));
+    expect(onModeChange).toHaveBeenCalledWith("concise");
+    expect(onClearConversation).toHaveBeenCalledOnce();
   });
 });

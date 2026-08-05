@@ -33,4 +33,5 @@ class MockVLM(VLMInterface):
     def analyze(self, request: VLMRequest) -> str:
         event = request.context.get("event", {})
         label = str(event.get("label", "background")).strip().lower()
-        return self._answers.get(label, self._answers["background"])
+        answer = self._answers.get(label, self._answers["background"])
+        return answer.split(" A future model", maxsplit=1)[0] if request.mode == "concise" else answer

@@ -22,6 +22,27 @@ RUGBY_ANALYST_INSTRUCTION = (
     "If information is uncertain or not visible, explicitly state that uncertainty."
 )
 
+DETAILED_ANSWER_INSTRUCTION = (
+    "Answer in detailed mode. Organize the response into Overview, Detailed "
+    "Analysis, Summary, and Uncertainty where applicable. Explain visible "
+    "observations and reasoning without claiming evidence outside the clip."
+)
+CONCISE_ANSWER_INSTRUCTION = (
+    "Answer in concise mode. Give a short summary with only key visible actions "
+    "and uncertainty where needed. Use no more than approximately 3-5 brief "
+    "bullet points."
+)
+
+
+def build_system_instruction(request: VLMRequest) -> str:
+    """Combine stable rugby guidance with the selected answer style."""
+    style = (
+        CONCISE_ANSWER_INSTRUCTION
+        if request.mode == "concise"
+        else DETAILED_ANSWER_INSTRUCTION
+    )
+    return f"{RUGBY_ANALYST_INSTRUCTION}\n\n{style}"
+
 
 class VLMConfigurationError(RuntimeError):
     """Raised when an explicitly selected external provider is incomplete."""

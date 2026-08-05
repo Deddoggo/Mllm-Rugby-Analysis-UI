@@ -8,12 +8,17 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from fastapi import HTTPException
 
-from app.api.analysis import analyze_clip, get_clip_conversation
+from app.api.analysis import (
+    analyze_clip,
+    delete_clip_conversation,
+    get_clip_conversation,
+)
 from app.schemas.analysis import (
     AIServiceAnalysisRequest,
     AnalysisGatewayResponse,
     AnalysisQuestionRequest,
     ConversationHistoryResponse,
+    ConversationDeleteResponse,
     ProviderMetadata,
 )
 from app.services.ai_client import (
@@ -137,6 +142,22 @@ class AIServiceClientTests(unittest.TestCase):
         self.assertEqual(response.conversation_id, "conv_001")
         self.assertEqual(response.messages[0].content, "Who won?")
 
+    def test_deletes_conversation_through_ai_service(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.method, "DELETE")
+            self.assertEqual(
+                request.url.path,
+                f"/analysis/conversations/{VIDEO_ID}/{EVENT_ID}/{CLIP_ID}",
+            )
+            return httpx.Response(200, json={"deleted": True})
+
+        client = AIServiceClient(
+            base_url="http://ai.test",
+            transport=httpx.MockTransport(handler),
+        )
+        response = asyncio.run(client.delete_conversation(VIDEO_ID, EVENT_ID, CLIP_ID))
+        self.assertTrue(response.deleted)
+
 
 class AnalysisGatewayTests(unittest.TestCase):
     def test_forwards_complete_multi_turn_qwen_response(self) -> None:
@@ -209,6 +230,42 @@ class AnalysisGatewayTests(unittest.TestCase):
         forwarded = client.analyze.await_args.args[0]
         self.assertEqual(forwarded.event_id, EVENT_ID)
         self.assertEqual(forwarded.question, "Explain this scrum phase")
+        self.assertEqual(forwarded.mode, "detailed")
+
+    def test_forwards_concise_answer_mode(self) -> None:
+        expected = AnalysisGatewayResponse(
+            answer="Short answer.",
+            provider="mock-rugby-vlm",
+            confidence="limited",
+            metadata={},
+        )
+        client = SimpleNamespace(analyze=AsyncMock(return_value=expected))
+        with (
+            patch("app.api.analysis.metadata_service", FakeMetadataService()),
+            patch("app.api.analysis.clip_repository", FakeClipRepository()),
+            patch("app.api.analysis.ai_client", client),
+        ):
+            asyncio.run(analyze_clip(
+                VIDEO_ID,
+                CLIP_ID,
+                AnalysisQuestionRequest(question="Summarize", mode="concise"),
+            ))
+        self.assertEqual(client.analyze.await_args.args[0].mode, "concise")
+
+    def test_delete_conversation_is_idempotently_forwarded(self) -> None:
+        response = ConversationDeleteResponse(deleted=True)
+        client = SimpleNamespace(delete_conversation=AsyncMock(return_value=response))
+        with (
+            patch("app.api.analysis.metadata_service", FakeMetadataService()),
+            patch("app.api.analysis.clip_repository", FakeClipRepository()),
+            patch("app.api.analysis.ai_client", client),
+        ):
+            first = asyncio.run(delete_clip_conversation(VIDEO_ID, CLIP_ID))
+            second = asyncio.run(delete_clip_conversation(VIDEO_ID, CLIP_ID))
+        self.assertTrue(first.deleted)
+        self.assertTrue(second.deleted)
+        self.assertEqual(client.delete_conversation.await_count, 2)
+        client.delete_conversation.assert_awaited_with(VIDEO_ID, EVENT_ID, CLIP_ID)
 
     def test_get_conversation_forwards_authoritative_event(self) -> None:
         expected = ConversationHistoryResponse(
