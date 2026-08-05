@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from app.core.config import DATA_DIR, REPOSITORY_ROOT
+from app.core.paths import resolve_data_path
 from app.schemas.event import EventDetectionResponse, EventListResponse, VideoEvent
 from app.schemas.video import VideoMetadata
 from app.services.ai_service_client import (
@@ -72,7 +72,7 @@ class EventDetectionService:
 
         try:
             detection = await self.ai_client.detect_events(
-                metadata.processed_path,
+                str(video_path),
                 video_id,
                 detector,
             )
@@ -142,7 +142,10 @@ class EventDetectionService:
         return metadata
 
     def _resolve_video_path(self, stored_path: str) -> Path:
-        candidate = (REPOSITORY_ROOT / stored_path).resolve()
-        if not candidate.is_relative_to(DATA_DIR.resolve()):
-            raise InvalidDetectorOutputError("Processed video path is outside the data directory.")
+        try:
+            candidate = Path(resolve_data_path(stored_path))
+        except ValueError as error:
+            raise InvalidDetectorOutputError(
+                "Processed video path is outside the data directory."
+            ) from error
         return candidate

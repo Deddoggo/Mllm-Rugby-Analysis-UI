@@ -12,6 +12,7 @@ from threading import RLock
 from uuid import uuid4
 
 from app.core.config import DATA_DIR, REPOSITORY_ROOT
+from app.core.paths import resolve_data_path
 from app.schemas.clip import ClipRecord
 from app.schemas.clip_preview import ClipPreviewResponse
 from app.schemas.event import VideoEvent
@@ -312,12 +313,20 @@ class ClipExtractionService:
         if metadata.status != "processed" or not metadata.processed_path:
             raise ClipVideoNotReadyError("Video preprocessing is not complete.")
         source_path = self._resolve_source_path(metadata.processed_path)
-        if not source_path.is_relative_to(self.data_dir.resolve()) or not source_path.is_file():
+        if not source_path.is_file():
             raise ClipVideoNotReadyError("Processed video file is unavailable.")
         return source_path
 
     def _resolve_source_path(self, stored_path: str) -> Path:
-        return (self.repository_root / stored_path).resolve()
+        try:
+            project_root = (
+                None
+                if self.repository_root.resolve() == REPOSITORY_ROOT.resolve()
+                else self.repository_root
+            )
+            return Path(resolve_data_path(stored_path, project_root=project_root))
+        except ValueError as error:
+            raise ClipVideoNotReadyError("Processed video path is invalid.") from error
 
     def _relative_path(self, path: Path) -> str:
         return path.resolve().relative_to(self.repository_root.resolve()).as_posix()

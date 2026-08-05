@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 
 from app.schemas.video import VideoMetadata, VideoUploadResponse
 from app.schemas.analysis_config import AnalysisConfig
+from app.core.paths import resolve_data_path
 from app.services.storage import (
     calculate_sha256,
     delete_video,
@@ -130,13 +131,27 @@ async def preprocess_video(
 
 async def finish_existing_video(metadata: VideoMetadata) -> VideoUploadResponse:
     """Return or retry normalization for content already registered by hash."""
-    original_path = resolve_original_video_path(metadata.video_id)
+    try:
+        metadata_original = Path(resolve_data_path(metadata.original_path))
+    except ValueError:
+        metadata_original = None
+    original_path = (
+        metadata_original
+        if metadata_original is not None and metadata_original.is_file()
+        else resolve_original_video_path(metadata.video_id)
+    )
     if original_path is None:
         raise VideoProcessingError("The original video file is missing.")
-    processed_path = generate_processed_path(metadata.video_id)
     if metadata.status == "processed":
-        uses_original = metadata.processed_path == metadata.original_path
-        if (uses_original and original_path.is_file()) or processed_path.is_file():
+        try:
+            metadata_processed = (
+                Path(resolve_data_path(metadata.processed_path))
+                if metadata.processed_path
+                else None
+            )
+        except ValueError:
+            metadata_processed = None
+        if metadata_processed is not None and metadata_processed.is_file():
             return upload_response(metadata, "already_exists")
     processed = await preprocess_video(metadata, original_path)
     return upload_response(processed, "already_exists")
@@ -263,17 +278,23 @@ async def upload_video(
 async def stream_video(video_id: str) -> FileResponse:
     """Stream a stored video with browser-compatible range request support."""
     metadata = metadata_service.get_by_id(video_id)
-    try:
-        processed_path = generate_processed_path(video_id)
-    except ValueError as error:
-        raise HTTPException(status_code=404, detail="Video not found.") from error
-    stored_path = (
-        processed_path
-        if metadata is not None
-        and metadata.status == "processed"
-        and processed_path.is_file()
-        else resolve_original_video_path(video_id)
-    )
+    stored_path: Path | None = None
+    if metadata is not None and metadata.status == "processed" and metadata.processed_path:
+        try:
+            candidate = Path(resolve_data_path(metadata.processed_path))
+        except ValueError:
+            candidate = None
+        if candidate is not None and candidate.is_file():
+            stored_path = candidate
+    if stored_path is None and metadata is not None:
+        try:
+            candidate = Path(resolve_data_path(metadata.original_path))
+        except ValueError:
+            candidate = None
+        if candidate is not None and candidate.is_file():
+            stored_path = candidate
+    if stored_path is None:
+        stored_path = resolve_original_video_path(video_id)
     if stored_path is None:
         raise HTTPException(status_code=404, detail="Video not found.")
 

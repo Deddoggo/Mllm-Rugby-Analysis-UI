@@ -313,7 +313,7 @@ class ClipApiTests(ClipTestCase):
     def test_main_video_stream_still_supports_ranges(self) -> None:
         with (
             patch("app.api.videos.metadata_service", FakeMetadataService(self.metadata)),
-            patch("app.api.videos.generate_processed_path", return_value=self.source),
+            patch("app.api.videos.resolve_data_path", return_value=str(self.source)),
         ):
             response = asyncio.run(stream_video(VIDEO_ID))
         ranged = asyncio.run(self._send_file_response(response, b"bytes=1-3"))
