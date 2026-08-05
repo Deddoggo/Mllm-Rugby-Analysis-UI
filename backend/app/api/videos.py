@@ -6,10 +6,12 @@ import logging
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from pydantic import ValidationError
 from fastapi.responses import FileResponse
 
 from app.schemas.video import VideoMetadata, VideoUploadResponse
+from app.schemas.analysis_config import AnalysisConfig
 from app.services.storage import (
     calculate_sha256,
     delete_video,
@@ -145,11 +147,30 @@ async def finish_existing_video(metadata: VideoMetadata) -> VideoUploadResponse:
     status_code=status.HTTP_201_CREATED,
     response_model=VideoUploadResponse,
 )
-async def upload_video(video: UploadFile = File(...)) -> VideoUploadResponse:
+async def upload_video(
+    video: UploadFile = File(...),
+    analysis_config: str | None = Form(default=None),
+) -> VideoUploadResponse:
     """Validate and persist one uploaded match video."""
+    try:
+        selected_config = (
+            AnalysisConfig.model_validate_json(analysis_config)
+            if analysis_config
+            else AnalysisConfig()
+        )
+    except ValidationError as error:
+        await video.close()
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid analysis_config multipart field.",
+        ) from error
     original_filename = Path((video.filename or "").replace("\\", "/")).name
     extension = Path(original_filename).suffix.lower().lstrip(".")
-    logger.info("Video upload started filename=%s", original_filename or "<missing>")
+    logger.info(
+        "Video upload started filename=%s event_detector=%s",
+        original_filename or "<missing>",
+        selected_config.event_detector,
+    )
 
     if not original_filename:
         await video.close()

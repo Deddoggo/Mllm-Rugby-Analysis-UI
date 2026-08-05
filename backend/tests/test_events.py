@@ -36,9 +36,16 @@ class FakeMetadataService:
 class CountingAIClient:
     def __init__(self) -> None:
         self.calls = 0
+        self.detectors: list[str] = []
 
-    async def detect_events(self, video_path: str, video_id: str):
+    async def detect_events(
+        self,
+        video_path: str,
+        video_id: str,
+        detector: str = "mock",
+    ):
         self.calls += 1
+        self.detectors.append(detector)
         return AIEventDetectionResponse(events=[
             AIEventProposal(
                 id="event_001",
@@ -145,7 +152,14 @@ class DetectorAndServiceTests(unittest.TestCase):
         self.assertEqual(first.events, reused.events)
         self.assertEqual(first.events, forced.events)
         self.assertEqual(self.ai_client.calls, 2)
-        self.assertEqual(first.detector, "ai-service")
+        self.assertEqual(first.detector, "ai-service:mock")
+        self.assertEqual(self.ai_client.detectors, ["mock", "mock"])
+
+    def test_selected_detector_is_forwarded_and_does_not_reuse_other_provider(self) -> None:
+        asyncio.run(self.service.detect_events(VIDEO_ID))
+        result = asyncio.run(self.service.detect_events(VIDEO_ID, detector="vjepa2"))
+        self.assertEqual(self.ai_client.detectors[-1], "vjepa2")
+        self.assertEqual(result.detector, "ai-service:vjepa2")
 
     def test_endpoint_get_detect_and_patch_flow(self) -> None:
         with patch("app.api.events.event_detection_service", self.service):

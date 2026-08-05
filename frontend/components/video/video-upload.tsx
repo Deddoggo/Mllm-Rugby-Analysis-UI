@@ -4,6 +4,7 @@ import { CheckCircle2, FileVideo2, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
 import { detectEvents, getVideoStreamUrl, uploadVideo } from "@/services/api";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useAnalysisSettingsStore } from "@/stores/settings-store";
 
 const ACCEPTED_VIDEO_TYPES = ".mp4,.mov,.mkv";
 type UploadPhase = "idle" | "uploading" | "processing" | "detecting" | "ready" | "error";
@@ -30,6 +31,7 @@ export function VideoUpload() {
   const upload = useWorkspaceStore((state) => state.currentVideo);
   const setCurrentVideo = useWorkspaceStore((state) => state.setCurrentVideo);
   const detectEventsForVideo = useWorkspaceStore((state) => state.detectEventsForVideo);
+  const eventDetector = useAnalysisSettingsStore((state) => state.eventDetector);
   const [phase, setPhase] = useState<UploadPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -41,6 +43,7 @@ export function VideoUpload() {
     setError(null);
     try {
       const response = await uploadVideo(file, {
+        eventDetector,
         onUploadComplete: () => setPhase((current) => current === "uploading" ? "processing" : current),
       });
       setCurrentVideo({
@@ -52,7 +55,10 @@ export function VideoUpload() {
       });
       setPhase("detecting");
       try {
-        await detectEventsForVideo(response.video_id, detectEvents);
+        await detectEventsForVideo(
+          response.video_id,
+          (videoId) => detectEvents(videoId, { eventDetector }),
+        );
         setPhase("ready");
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "Event detection failed.";

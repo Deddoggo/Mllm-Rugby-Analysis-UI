@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.api.events import get_event_detection_service
 from app.main import app
 from app.services.event_detection_service import AIEventDetectionService
+from app.detectors.factory import DetectorUnavailableError, get_detector
 from vjepa2.mock_detector import MockVJEPA2Detector
 
 
@@ -72,3 +73,34 @@ def test_event_detection_endpoint_uses_internal_detector(tmp_path: Path) -> None
         "id", "label", "start", "end", "confidence",
     }
     assert all(event["label"] != "Background" for event in payload["events"])
+
+
+def test_detector_factory_selects_mock_and_rejects_unavailable_vjepa2() -> None:
+    assert isinstance(get_detector("mock"), MockVJEPA2Detector)
+    try:
+        get_detector("vjepa2")
+    except DetectorUnavailableError as error:
+        assert str(error) == (
+            "V-JEPA2 detector requires GPU deployment and is currently unavailable."
+        )
+    else:
+        raise AssertionError("V-JEPA2 must not silently fall back to mock")
+
+
+def test_event_detection_endpoint_reports_unavailable_vjepa2(tmp_path: Path) -> None:
+    service, _ = make_service(tmp_path)
+    app.dependency_overrides[get_event_detection_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            response = client.post("/analysis/events/detect", json={
+                "video_path": "data/processed/match.mp4",
+                "video_id": VIDEO_ID,
+                "detector": "vjepa2",
+            })
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "V-JEPA2 detector requires GPU deployment and is currently unavailable."
+    )

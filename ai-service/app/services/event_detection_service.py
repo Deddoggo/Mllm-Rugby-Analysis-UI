@@ -6,9 +6,9 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.core.config import settings
+from app.detectors.factory import get_detector
 from app.schemas.event import DetectedEventProposal, EventDetectionResponse
 from vjepa2.contracts import EventDetector
-from vjepa2.mock_detector import MockVJEPA2Detector
 
 
 class EventDetectionInputError(ValueError):
@@ -24,14 +24,24 @@ class AIEventDetectionService:
         data_dir: Path = settings.data_dir,
         video_metadata_file: Path = settings.video_metadata_file,
     ) -> None:
-        self.detector = detector or MockVJEPA2Detector()
+        self.detector = detector
         self.data_dir = data_dir.resolve()
         self.video_metadata_file = video_metadata_file.resolve()
 
-    def detect_events(self, video_path: str, video_id: str) -> EventDetectionResponse:
+    def detect_events(
+        self,
+        video_path: str,
+        video_id: str,
+        detector_name: str = "mock",
+    ) -> EventDetectionResponse:
         resolved_path = self._resolve_video_path(video_path)
         duration = self._video_duration(video_id)
-        proposals = self.detector.detect_events(str(resolved_path), video_id, duration)
+        detector = (
+            self.detector
+            if self.detector is not None and detector_name == "mock"
+            else get_detector(detector_name)
+        )
+        proposals = detector.detect_events(str(resolved_path), video_id, duration)
         try:
             events = [
                 DetectedEventProposal.model_validate(proposal)

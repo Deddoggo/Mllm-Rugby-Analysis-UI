@@ -26,6 +26,7 @@ import type {
   EventRepository,
   VideoRepository,
 } from "./contracts";
+import type { EventDetectorEngine } from "@/types/analysis-settings";
 
 export interface VideoUploadResponse {
   video_id: string;
@@ -38,6 +39,16 @@ export interface VideoUploadResponse {
 
 interface UploadVideoOptions {
   onUploadComplete?: () => void;
+  eventDetector?: EventDetectorEngine;
+}
+
+interface DetectEventsOptions {
+  force?: boolean;
+  eventDetector?: EventDetectorEngine;
+}
+
+function analysisConfig(eventDetector: EventDetectorEngine = "mock") {
+  return { event_detector: eventDetector };
 }
 
 function getApiUrl() {
@@ -139,6 +150,10 @@ export function uploadVideo(
 ): Promise<VideoUploadResponse> {
   const formData = new FormData();
   formData.append("video", file);
+  formData.append(
+    "analysis_config",
+    JSON.stringify(analysisConfig(options.eventDetector)),
+  );
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("POST", `${getApiUrl()}/videos/upload`);
@@ -166,12 +181,18 @@ export function uploadVideo(
 
 export async function detectEvents(
   videoId: string,
-  options: { force?: boolean } = {},
+  options: DetectEventsOptions = {},
 ): Promise<VideoEvent[]> {
   const query = options.force ? "?force=true" : "";
   const response = await fetch(
     `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/events/detect${query}`,
-    { method: "POST" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        analysis_config: analysisConfig(options.eventDetector),
+      }),
+    },
   );
   if (!response.ok) {
     throw new Error(await apiErrorMessage(response, `Event detection failed (${response.status}).`));
@@ -288,8 +309,8 @@ export class ApiEventRepository implements EventRepository {
     return getEvents(videoId);
   }
 
-  async detectEvents(videoId: string, force = false) {
-    return detectEvents(videoId, { force });
+  async detectEvents(videoId: string, force = false, eventDetector: EventDetectorEngine = "mock") {
+    return detectEvents(videoId, { force, eventDetector });
   }
 
   async updateEventBoundaries(

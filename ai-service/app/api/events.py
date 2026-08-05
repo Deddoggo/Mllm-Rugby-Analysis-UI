@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas.event import EventDetectionRequest, EventDetectionResponse
+from app.detectors.factory import DetectorUnavailableError
 from app.services.event_detection_service import (
     AIEventDetectionService,
     EventDetectionInputError,
@@ -23,6 +24,12 @@ def detect_events(
     service: AIEventDetectionService = Depends(get_event_detection_service),
 ) -> EventDetectionResponse:
     try:
-        return service.detect_events(request.video_path, request.video_id)
+        return service.detect_events(
+            request.video_path,
+            request.video_id,
+            request.detector,
+        )
+    except DetectorUnavailableError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     except EventDetectionInputError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

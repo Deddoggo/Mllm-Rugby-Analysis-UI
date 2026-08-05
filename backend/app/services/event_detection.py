@@ -8,6 +8,7 @@ from app.core.config import DATA_DIR, REPOSITORY_ROOT
 from app.schemas.event import EventDetectionResponse, EventListResponse, VideoEvent
 from app.schemas.video import VideoMetadata
 from app.services.ai_service_client import (
+    AIServiceDetectorUnavailableError,
     AIServiceResponseError,
     AIServiceTimeoutError,
     AIServiceUnavailableError,
@@ -50,11 +51,15 @@ class EventDetectionService:
         self,
         video_id: str,
         force: bool = False,
+        detector: str = "mock",
     ) -> EventDetectionResponse:
         metadata = self._require_video(video_id)
         if not force:
             existing = self.repository.get_events(video_id)
-            if existing is not None:
+            compatible_detectors = {f"ai-service:{detector}"}
+            if detector == "mock":
+                compatible_detectors.update({"ai-service", "mock-vjepa2"})
+            if existing is not None and existing.detector in compatible_detectors:
                 return EventDetectionResponse.model_validate(existing)
 
         if metadata.status != "processed" or not metadata.processed_path:
@@ -69,7 +74,10 @@ class EventDetectionService:
             detection = await self.ai_client.detect_events(
                 metadata.processed_path,
                 video_id,
+                detector,
             )
+        except AIServiceDetectorUnavailableError as error:
+            raise EventDetectionUnavailableError(str(error)) from error
         except AIServiceResponseError as error:
             raise InvalidDetectorOutputError(str(error)) from error
         except (AIServiceTimeoutError, AIServiceUnavailableError) as error:
@@ -98,7 +106,7 @@ class EventDetectionService:
         return self.repository.save_events(
             video_id,
             events,
-            detector="ai-service",
+            detector=f"ai-service:{detector}",
             status="ready",
         )
 

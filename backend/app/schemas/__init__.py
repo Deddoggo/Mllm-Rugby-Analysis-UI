@@ -7,6 +7,7 @@ from app.schemas.event import (
     VideoEvent,
 )
 from app.schemas.clip import ClipCreateRequest, ClipCreateResponse, ClipListResponse, ClipRecord
+from app.schemas.analysis_config import AnalysisConfig, EventDetectionRequest
 
 __all__ = [
     "EventBoundaryUpdateRequest",
@@ -17,4 +18,6 @@ __all__ = [
     "ClipCreateResponse",
     "ClipListResponse",
     "ClipRecord",
+    "AnalysisConfig",
+    "EventDetectionRequest",
 ]

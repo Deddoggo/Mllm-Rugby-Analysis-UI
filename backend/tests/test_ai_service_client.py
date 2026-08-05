@@ -24,6 +24,7 @@ class EventDetectionAIClientTests(unittest.TestCase):
             self.assertEqual(json.loads(request.content), {
                 "video_path": "data/processed/match.mp4",
                 "video_id": VIDEO_ID,
+                "detector": "mock",
             })
             return httpx.Response(200, json={"events": [{
                 "id": "event_001",
@@ -42,6 +43,27 @@ class EventDetectionAIClientTests(unittest.TestCase):
             VIDEO_ID,
         ))
         self.assertEqual(response.events[0].label, "Scrum")
+
+    def test_selected_detector_is_forwarded(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(json.loads(request.content)["detector"], "vjepa2")
+            return httpx.Response(503, json={
+                "detail": "V-JEPA2 detector requires GPU deployment and is currently unavailable.",
+            })
+
+        client = EventDetectionAIClient(
+            base_url="http://ai.test",
+            transport=httpx.MockTransport(handler),
+        )
+        with self.assertRaisesRegex(
+            AIServiceResponseError,
+            "requires GPU deployment",
+        ):
+            asyncio.run(client.detect_events(
+                "data/processed/match.mp4",
+                VIDEO_ID,
+                "vjepa2",
+            ))
 
     def test_timeout_is_distinct(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:

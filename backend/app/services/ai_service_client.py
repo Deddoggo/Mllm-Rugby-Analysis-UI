@@ -24,6 +24,10 @@ class AIServiceResponseError(RuntimeError):
     """Raised when the detector endpoint returns an invalid response."""
 
 
+class AIServiceDetectorUnavailableError(AIServiceResponseError):
+    """Raised when a requested detector is not deployed by the AI service."""
+
+
 class EventDetectionAIClient:
     """Call AI-owned detector APIs without importing model code."""
 
@@ -41,6 +45,7 @@ class EventDetectionAIClient:
         self,
         video_path: str,
         video_id: str,
+        detector: str = "mock",
     ) -> AIEventDetectionResponse:
         try:
             async with httpx.AsyncClient(
@@ -50,7 +55,11 @@ class EventDetectionAIClient:
             ) as client:
                 response = await client.post(
                     "/analysis/events/detect",
-                    json={"video_path": video_path, "video_id": video_id},
+                    json={
+                        "video_path": video_path,
+                        "video_id": video_id,
+                        "detector": detector,
+                    },
                 )
         except httpx.TimeoutException as error:
             LOGGER.exception("AI event detection timed out for video_id=%s", video_id)
@@ -66,8 +75,17 @@ class EventDetectionAIClient:
                 response.status_code,
                 response.text[:2_000],
             )
+            detail = None
+            try:
+                payload = response.json()
+                if isinstance(payload, dict) and isinstance(payload.get("detail"), str):
+                    detail = payload["detail"]
+            except ValueError:
+                pass
+            if response.status_code == 503 and detail:
+                raise AIServiceDetectorUnavailableError(detail)
             raise AIServiceResponseError(
-                f"AI event detection failed ({response.status_code})."
+                detail or f"AI event detection failed ({response.status_code})."
             )
         try:
             return AIEventDetectionResponse.model_validate(response.json())

@@ -9,6 +9,7 @@ from app.schemas.event import (
     EventListResponse,
     VideoEvent,
 )
+from app.schemas.analysis_config import EventDetectionRequest
 from app.services.event_detection import (
     EventDetectionService,
     EventDetectionUnavailableError,
@@ -39,9 +40,15 @@ def event_http_error(error: Exception) -> HTTPException:
 async def detect_events(
     video_id: str,
     force: bool = Query(False),
+    request: EventDetectionRequest | None = None,
 ) -> EventDetectionResponse:
     try:
-        return await event_detection_service.detect_events(video_id, force=force)
+        detector = request.analysis_config.event_detector if request else "mock"
+        return await event_detection_service.detect_events(
+            video_id,
+            force=force,
+            detector=detector,
+        )
     except Exception as error:
         raise event_http_error(error) from error
 

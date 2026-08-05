@@ -7,6 +7,7 @@ import type {
   VideoAsset,
   VideoEvent,
 } from "@/lib/domain";
+import type { EventDetectorEngine } from "@/types/analysis-settings";
 
 export interface VideoRepository {
   getDemoVideo(): Promise<VideoAsset>;
@@ -14,7 +15,11 @@ export interface VideoRepository {
 
 export interface EventRepository {
   getEvents(videoId: string): Promise<VideoEvent[]>;
-  detectEvents(videoId: string, force?: boolean): Promise<VideoEvent[]>;
+  detectEvents(
+    videoId: string,
+    force?: boolean,
+    eventDetector?: EventDetectorEngine,
+  ): Promise<VideoEvent[]>;
   updateEventBoundaries(videoId: string, eventId: string, start: number, end: number): Promise<VideoEvent>;
 }
 

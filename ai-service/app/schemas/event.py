@@ -1,5 +1,7 @@
 """HTTP contracts for AI-owned rugby event detection."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -8,6 +10,7 @@ class EventDetectionRequest(BaseModel):
 
     video_path: str = Field(min_length=1)
     video_id: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_-]+$")
+    detector: Literal["mock", "vjepa2"] = "mock"
 
 
 class DetectedEventProposal(BaseModel):

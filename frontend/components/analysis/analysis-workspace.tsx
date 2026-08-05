@@ -55,6 +55,7 @@ export function AnalysisWorkspace() {
   const detectEventsForVideo = useWorkspaceStore((state) => state.detectEventsForVideo);
   const setClipState = useWorkspaceStore((state) => state.setClipState);
   const setActiveVlmFromAnalysis = useAnalysisSettingsStore((state) => state.setActiveVlmFromAnalysis);
+  const eventDetector = useAnalysisSettingsStore((state) => state.eventDetector);
   const [search, setSearch] = useState("");
   const [current, setCurrent] = useState(0);
   const [observedDuration, setObservedDuration] = useState({ sourceId: "demo", value: 300 });
@@ -128,12 +129,12 @@ export function AnalysisWorkspace() {
     try {
       await detectEventsForVideo(
         currentVideo.id,
-        (videoId) => detectEvents(videoId, { force }),
+        (videoId) => detectEvents(videoId, { force, eventDetector }),
       );
     } catch {
       // The store retains a visible, retryable detection error.
     }
-  }, [currentVideo, detectEventsForVideo]);
+  }, [currentVideo, detectEventsForVideo, eventDetector]);
 
   const commitBounds = useCallback(async (id: string, start: number, end: number) => {
     const original = useWorkspaceStore.getState().events.find((event) => event.id === id);
