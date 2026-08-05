@@ -9,6 +9,7 @@ dependencies:
   - fastapi
   - uvicorn
   - pydantic
+  - python-multipart
   - python-dotenv
   - pytest
   - httpx

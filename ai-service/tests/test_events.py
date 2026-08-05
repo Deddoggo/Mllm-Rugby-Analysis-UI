@@ -1,6 +1,5 @@
-"""AI-service event detection endpoint and detector contract tests."""
+"""AI-service multipart event detection endpoint and detector contract tests."""
 
-import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -16,24 +15,10 @@ VIDEO_ID = "match_20260803_abcd1234"
 
 
 def make_service(tmp_path: Path) -> tuple[AIEventDetectionService, Path]:
-    data_dir = tmp_path / "data"
-    video_path = data_dir / "processed" / "match.mp4"
-    video_path.parent.mkdir(parents=True)
+    video_path = tmp_path / "match.mp4"
     video_path.write_bytes(b"mock-video")
-    metadata_file = data_dir / "metadata" / "videos.json"
-    metadata_file.parent.mkdir(parents=True)
-    metadata_file.write_text(json.dumps([{
-        "video_id": VIDEO_ID,
-        "duration": 180.0,
-        "processed_path": "data/processed/match.mp4",
-        "status": "processed",
-    }]), encoding="utf-8")
     return (
-        AIEventDetectionService(
-            detector=MockVJEPA2Detector(),
-            data_dir=data_dir,
-            video_metadata_file=metadata_file,
-        ),
+        AIEventDetectionService(detector=MockVJEPA2Detector()),
         video_path,
     )
 
@@ -59,10 +44,14 @@ def test_event_detection_endpoint_uses_internal_detector(tmp_path: Path) -> None
     app.dependency_overrides[get_event_detection_service] = lambda: service
     try:
         with TestClient(app) as client:
-            response = client.post("/analysis/events/detect", json={
-                "video_path": "data/processed/match.mp4",
-                "video_id": VIDEO_ID,
-            })
+            response = client.post(
+                "/analysis/events/detect",
+                data={
+                    "video_id": VIDEO_ID,
+                    "detector": "mock",
+                },
+                files={"video": ("match.mp4", b"mock-video", "video/mp4")},
+            )
     finally:
         app.dependency_overrides.clear()
 
@@ -87,16 +76,20 @@ def test_detector_factory_selects_mock_and_rejects_unavailable_vjepa2() -> None:
         raise AssertionError("V-JEPA2 must not silently fall back to mock")
 
 
-def test_event_detection_endpoint_reports_unavailable_vjepa2(tmp_path: Path) -> None:
-    service, _ = make_service(tmp_path)
+def test_event_detection_endpoint_reports_unavailable_vjepa2() -> None:
+    service = AIEventDetectionService()
     app.dependency_overrides[get_event_detection_service] = lambda: service
     try:
         with TestClient(app) as client:
-            response = client.post("/analysis/events/detect", json={
-                "video_path": "data/processed/match.mp4",
-                "video_id": VIDEO_ID,
-                "detector": "vjepa2",
-            })
+            response = client.post(
+                "/analysis/events/detect",
+                data={
+                    "video_id": VIDEO_ID,
+                    "detector": "vjepa2",
+                    "duration": "180",
+                },
+                files={"video": ("match.mp4", b"mock-video", "video/mp4")},
+            )
     finally:
         app.dependency_overrides.clear()
 
@@ -104,3 +97,43 @@ def test_event_detection_endpoint_reports_unavailable_vjepa2(tmp_path: Path) -> 
     assert response.json()["detail"] == (
         "V-JEPA2 detector requires GPU deployment and is currently unavailable."
     )
+
+
+def test_endpoint_writes_uploaded_video_to_temporary_file_then_cleans_it() -> None:
+    class RecordingDetector:
+        def __init__(self) -> None:
+            self.path: Path | None = None
+            self.contents: bytes | None = None
+
+        def detect_events(
+            self,
+            video_path: str,
+            video_id: str,
+            duration: float,
+        ) -> list[dict]:
+            self.path = Path(video_path)
+            assert self.path.is_file()
+            self.contents = self.path.read_bytes()
+            return MockVJEPA2Detector().detect_events(video_path, video_id, duration)
+
+    detector = RecordingDetector()
+    service = AIEventDetectionService(detector=detector)
+    app.dependency_overrides[get_event_detection_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/analysis/events/detect",
+                data={
+                    "video_id": VIDEO_ID,
+                    "detector": "mock",
+                    "duration": "180",
+                },
+                files={"video": ("match.mp4", b"uploaded-video", "video/mp4")},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert detector.contents == b"uploaded-video"
+    assert detector.path is not None
+    assert not detector.path.exists()

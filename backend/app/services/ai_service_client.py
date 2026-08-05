@@ -1,6 +1,7 @@
 """HTTP boundary for AI-service event detection."""
 
 import logging
+from pathlib import Path
 
 import httpx
 from pydantic import ValidationError
@@ -46,21 +47,33 @@ class EventDetectionAIClient:
         video_path: str,
         video_id: str,
         detector: str = "mock",
+        duration: float | None = None,
     ) -> AIEventDetectionResponse:
         try:
-            async with httpx.AsyncClient(
-                base_url=self.base_url,
-                timeout=self.timeout_seconds,
-                transport=self.transport,
-            ) as client:
-                response = await client.post(
-                    "/analysis/events/detect",
-                    json={
-                        "video_path": video_path,
-                        "video_id": video_id,
-                        "detector": detector,
-                    },
-                )
+            with open(video_path, "rb") as video_file:
+                async with httpx.AsyncClient(
+                    base_url=self.base_url,
+                    timeout=self.timeout_seconds,
+                    transport=self.transport,
+                ) as client:
+                    response = await client.post(
+                        "/analysis/events/detect",
+                        data={
+                            "video_id": video_id,
+                            "detector": detector,
+                            "duration": str(duration if duration is not None else 0),
+                        },
+                        files={
+                            "video": (
+                                Path(video_path).name,
+                                video_file,
+                                "video/mp4",
+                            ),
+                        },
+                    )
+        except OSError as error:
+            LOGGER.exception("Video upload source is unavailable for video_id=%s", video_id)
+            raise AIServiceResponseError("Processed video file is unavailable.") from error
         except httpx.TimeoutException as error:
             LOGGER.exception("AI event detection timed out for video_id=%s", video_id)
             raise AIServiceTimeoutError("AI event detection timed out.") from error

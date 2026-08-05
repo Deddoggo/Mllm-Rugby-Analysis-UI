@@ -68,17 +68,6 @@ class EventDetectionService:
             raise InvalidDetectorOutputError("Video duration is unavailable or invalid.")
         video_path = self._resolve_video_path(metadata.processed_path)
 
-        print(
-            "EVENT DEBUG:",
-            {
-                "video_id": video_id,
-                "stored_path": metadata.processed_path,
-                "resolved_path": str(video_path),
-                "exists": video_path.exists(),
-                "is_file": video_path.is_file(),
-            },
-        )
-
         if not video_path.is_file():
             raise VideoNotReadyError("Processed video file is unavailable.")
 
@@ -87,6 +76,7 @@ class EventDetectionService:
                 str(video_path),
                 video_id,
                 detector,
+                metadata.duration,
             )
         except AIServiceDetectorUnavailableError as error:
             raise EventDetectionUnavailableError(str(error)) from error

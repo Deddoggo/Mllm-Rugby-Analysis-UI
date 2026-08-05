@@ -1,18 +1,19 @@
-"""AI-owned detector orchestration over the shared data directory."""
+"""AI-owned detector orchestration over request-scoped video files."""
 
-import json
 from pathlib import Path
 
 from pydantic import ValidationError
 
-from app.core.config import settings
 from app.detectors.factory import get_detector
 from app.schemas.event import DetectedEventProposal, EventDetectionResponse
 from vjepa2.contracts import EventDetector
 
 
+DEFAULT_MOCK_VIDEO_DURATION_SECONDS = 300.0
+
+
 class EventDetectionInputError(ValueError):
-    """Raised when shared video input is unavailable or malformed."""
+    """Raised when an uploaded inference input is unavailable or malformed."""
 
 
 class AIEventDetectionService:
@@ -21,27 +22,34 @@ class AIEventDetectionService:
     def __init__(
         self,
         detector: EventDetector | None = None,
-        data_dir: Path = settings.data_dir,
-        video_metadata_file: Path = settings.video_metadata_file,
     ) -> None:
         self.detector = detector
-        self.data_dir = data_dir.resolve()
-        self.video_metadata_file = video_metadata_file.resolve()
 
     def detect_events(
         self,
         video_path: str,
         video_id: str,
         detector_name: str = "mock",
+        duration: float | None = None,
     ) -> EventDetectionResponse:
         resolved_path = self._resolve_video_path(video_path)
-        duration = self._video_duration(video_id)
+        effective_duration = (
+            float(duration)
+            if duration is not None
+            else DEFAULT_MOCK_VIDEO_DURATION_SECONDS
+        )
+        if effective_duration <= 0:
+            raise EventDetectionInputError("Video duration is unavailable or invalid.")
         detector = (
             self.detector
             if self.detector is not None and detector_name == "mock"
             else get_detector(detector_name)
         )
-        proposals = detector.detect_events(str(resolved_path), video_id, duration)
+        proposals = detector.detect_events(
+            str(resolved_path),
+            video_id,
+            effective_duration,
+        )
         try:
             events = [
                 DetectedEventProposal.model_validate(proposal)
@@ -50,37 +58,12 @@ class AIEventDetectionService:
             ]
         except (ValidationError, AttributeError, TypeError) as error:
             raise EventDetectionInputError("Detector returned invalid event proposals.") from error
-        if any(event.end > duration for event in events):
+        if any(event.end > effective_duration for event in events):
             raise EventDetectionInputError("Detector timestamps exceed video duration.")
         return EventDetectionResponse(events=events)
 
     def _resolve_video_path(self, stored_path: str) -> Path:
-        candidate = Path(stored_path)
-        if not candidate.is_absolute():
-            if candidate.parts and candidate.parts[0].lower() == "data":
-                candidate = self.data_dir.parent / candidate
-            else:
-                candidate = self.data_dir / candidate
-        candidate = candidate.resolve()
-        if not candidate.is_relative_to(self.data_dir) or not candidate.is_file():
-            raise EventDetectionInputError("Processed video file is unavailable.")
+        candidate = Path(stored_path).resolve()
+        if not candidate.is_file():
+            raise EventDetectionInputError("Uploaded video file is unavailable.")
         return candidate
-
-    def _video_duration(self, video_id: str) -> float:
-        try:
-            payload = json.loads(self.video_metadata_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
-            raise EventDetectionInputError("Video metadata is unavailable or invalid.") from error
-        if not isinstance(payload, list):
-            raise EventDetectionInputError("Video metadata is unavailable or invalid.")
-        video = next(
-            (
-                item for item in payload
-                if isinstance(item, dict) and item.get("video_id") == video_id
-            ),
-            None,
-        )
-        duration = video.get("duration") if video else None
-        if not isinstance(duration, (int, float)) or duration <= 0:
-            raise EventDetectionInputError("Video duration is unavailable or invalid.")
-        return float(duration)

@@ -37,15 +37,18 @@ class CountingAIClient:
     def __init__(self) -> None:
         self.calls = 0
         self.detectors: list[str] = []
+        self.durations: list[float | None] = []
 
     async def detect_events(
         self,
         video_path: str,
         video_id: str,
         detector: str = "mock",
+        duration: float | None = None,
     ):
         self.calls += 1
         self.detectors.append(detector)
+        self.durations.append(duration)
         return AIEventDetectionResponse(events=[
             AIEventProposal(
                 id="event_001",
@@ -154,6 +157,7 @@ class DetectorAndServiceTests(unittest.TestCase):
         self.assertEqual(self.ai_client.calls, 2)
         self.assertEqual(first.detector, "ai-service:mock")
         self.assertEqual(self.ai_client.detectors, ["mock", "mock"])
+        self.assertEqual(self.ai_client.durations, [180, 180])
 
     def test_selected_detector_is_forwarded_and_does_not_reuse_other_provider(self) -> None:
         asyncio.run(self.service.detect_events(VIDEO_ID))
