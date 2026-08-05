@@ -4,7 +4,11 @@ import httpx
 from pydantic import ValidationError
 
 from app.core.config import AI_SERVICE_URL
-from app.schemas.analysis import AIServiceAnalysisRequest, AnalysisGatewayResponse
+from app.schemas.analysis import (
+    AIServiceAnalysisRequest,
+    AnalysisGatewayResponse,
+    ConversationHistoryResponse,
+)
 
 
 class AIServiceUnavailableError(ConnectionError):
@@ -29,16 +33,34 @@ class AIServiceClient:
         self.transport = transport
 
     async def analyze(self, request: AIServiceAnalysisRequest) -> AnalysisGatewayResponse:
+        response = await self._request("POST", "/analysis/query", json=request.model_dump())
+        return self._validate_response(response, AnalysisGatewayResponse)
+
+    async def get_conversation(
+        self,
+        video_id: str,
+        event_id: str,
+        clip_id: str,
+    ) -> ConversationHistoryResponse:
+        response = await self._request(
+            "GET",
+            f"/analysis/conversations/{video_id}/{event_id}/{clip_id}",
+        )
+        return self._validate_response(response, ConversationHistoryResponse)
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        **kwargs,
+    ) -> httpx.Response:
         try:
             async with httpx.AsyncClient(
                 base_url=self.base_url,
                 timeout=self.timeout_seconds,
                 transport=self.transport,
             ) as client:
-                response = await client.post(
-                    "/analysis/query",
-                    json=request.model_dump(),
-                )
+                response = await client.request(method, path, **kwargs)
         except httpx.RequestError as error:
             raise AIServiceUnavailableError("AI service is unavailable.") from error
 
@@ -48,7 +70,11 @@ class AIServiceClient:
             raise AIServiceProtocolError(
                 f"AI service rejected the analysis request ({response.status_code})."
             )
+        return response
+
+    @staticmethod
+    def _validate_response(response: httpx.Response, schema):
         try:
-            return AnalysisGatewayResponse.model_validate(response.json())
+            return schema.model_validate(response.json())
         except (ValueError, ValidationError) as error:
             raise AIServiceProtocolError("AI service returned an invalid response.") from error

@@ -6,6 +6,7 @@ import type {
   EventClip,
   TemporaryClipPreview,
   VideoEvent,
+  ChatMessage,
 } from "@/lib/domain";
 import {
   analysisResponseSchema,
@@ -15,6 +16,7 @@ import {
   apiClipSchema,
   apiClipPreviewSchema,
   clipListResponseSchema,
+  conversationHistoryResponseSchema,
 } from "@/lib/domain";
 import type {
   AnalysisService,
@@ -339,12 +341,49 @@ export class ApiAnalysisService implements AnalysisService {
       throw new Error(await apiErrorMessage(response, `AI analysis failed (${response.status}).`));
     }
     const payload = analysisGatewayResponseSchema.parse(await response.json());
+    const providerLabel = formatProviderLabel(payload.provider_metadata, payload.provider);
     return analysisResponseSchema.parse({
       id: crypto.randomUUID(),
       answer: payload.answer,
       model: payload.provider,
+      providerLabel,
+      conversationId: payload.conversation_id ?? undefined,
+      turnNumber: payload.turn_number,
       processingTime: Math.round(performance.now() - started),
       createdAt: new Date().toISOString(),
     });
   }
+
+  async getConversation(videoId: string, clipId: string): Promise<ChatMessage[]> {
+    const response = await fetch(
+      `${getApiUrl()}/videos/${encodeURIComponent(videoId)}/clips/${encodeURIComponent(clipId)}/analysis`,
+    );
+    if (!response.ok) {
+      throw new Error(await apiErrorMessage(
+        response,
+        `Conversation loading failed (${response.status}).`,
+      ));
+    }
+    const payload = conversationHistoryResponseSchema.parse(await response.json());
+    return payload.messages.map((message, index) => ({
+      id: `${payload.conversation_id || clipId}_${index}`,
+      role: message.role,
+      content: message.content,
+      createdAt: message.created_at,
+      model: message.provider ?? undefined,
+      providerLabel: message.provider_metadata
+        ? formatProviderLabel(message.provider_metadata, message.provider ?? "")
+        : message.provider ?? undefined,
+    }));
+  }
+}
+
+function formatProviderLabel(
+  metadata: { display_name: string; model?: string | null } | undefined,
+  fallback: string,
+) {
+  if (!metadata) return fallback;
+  return metadata.model
+    ? `${metadata.display_name} · ${metadata.model}`
+    : metadata.display_name;
 }

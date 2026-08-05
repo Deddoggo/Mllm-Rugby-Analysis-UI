@@ -1,6 +1,7 @@
 import type {
   AnalysisRequest,
   AnalysisResponse,
+  ChatMessage,
   EventClip,
   TemporaryClipPreview,
   VideoAsset,
@@ -19,6 +20,7 @@ export interface EventRepository {
 
 export interface AnalysisService {
   analyze(request: AnalysisRequest): Promise<AnalysisResponse>;
+  getConversation(videoId: string, clipId: string): Promise<ChatMessage[]>;
 }
 
 export interface ClipRepository {

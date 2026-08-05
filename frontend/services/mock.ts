@@ -63,8 +63,13 @@ export class MockAnalysisService implements AnalysisService {
       id: crypto.randomUUID(),
       answer: `${observations[request.eventLabel]} For the adjusted clip (${request.start.toFixed(1)}s–${request.end.toFixed(1)}s), the evidence supports a descriptive reading, but not a definitive tactical conclusion. Visual inference is mocked in this demo; connect a V-JEPA2 event service and a video-language model to validate player identities, possession, and intent.`,
       model: "mock-rugby-vlm",
+      providerLabel: "Mock VLM",
       processingTime: Math.round(performance.now() - started),
       createdAt: new Date().toISOString(),
     });
+  }
+
+  async getConversation(): Promise<[]> {
+    return [];
   }
 }

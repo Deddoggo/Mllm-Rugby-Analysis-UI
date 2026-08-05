@@ -13,4 +13,8 @@ export class ClipAwareAnalysisService implements AnalysisService {
       ? this.clipService.analyze(request)
       : this.demoService.analyze(request);
   }
+
+  getConversation(videoId: string, clipId: string) {
+    return this.clipService.getConversation(videoId, clipId);
+  }
 }

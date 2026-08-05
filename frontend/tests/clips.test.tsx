@@ -208,6 +208,6 @@ describe("clip preview", () => {
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
     expect(screen.getByRole("slider", { name: "Seek video" })).toBeTruthy();
     expect(screen.getByText("Not saved to analysis cache")).toBeTruthy();
-    expect(screen.getByText(/AI Offline/)).toBeTruthy();
+    expect(screen.getByText("Preview only · no VLM request")).toBeTruthy();
   });
 });

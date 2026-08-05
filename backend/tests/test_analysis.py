@@ -8,11 +8,13 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from fastapi import HTTPException
 
-from app.api.analysis import analyze_clip
+from app.api.analysis import analyze_clip, get_clip_conversation
 from app.schemas.analysis import (
     AIServiceAnalysisRequest,
     AnalysisGatewayResponse,
     AnalysisQuestionRequest,
+    ConversationHistoryResponse,
+    ProviderMetadata,
 )
 from app.services.ai_client import AIServiceClient, AIServiceUnavailableError
 
@@ -52,6 +54,13 @@ class AIServiceClientTests(unittest.TestCase):
             return httpx.Response(200, json={
                 "answer": "This is a scrum phase.",
                 "provider": "mock-rugby-vlm",
+                "provider_metadata": {
+                    "id": "mock",
+                    "display_name": "Mock VLM",
+                    "model": None,
+                },
+                "conversation_id": "conv_001",
+                "turn_number": 1,
                 "confidence": "limited",
                 "metadata": {"context_used": {"event": {"label": "Scrum"}}},
             })
@@ -67,7 +76,34 @@ class AIServiceClientTests(unittest.TestCase):
             question="Explain this scrum phase",
         )))
         self.assertEqual(response.provider, "mock-rugby-vlm")
+        self.assertEqual(response.conversation_id, "conv_001")
         self.assertEqual(response.confidence, "limited")
+
+    def test_retrieves_conversation_history(self) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(
+                request.url.path,
+                f"/analysis/conversations/{VIDEO_ID}/{EVENT_ID}/{CLIP_ID}",
+            )
+            return httpx.Response(200, json={
+                "conversation_id": "conv_001",
+                "video_id": VIDEO_ID,
+                "event_id": EVENT_ID,
+                "clip_id": CLIP_ID,
+                "messages": [{
+                    "role": "user",
+                    "content": "Who won?",
+                    "created_at": "2026-08-05T12:00:00Z",
+                }],
+            })
+
+        client = AIServiceClient(
+            base_url="http://ai.test",
+            transport=httpx.MockTransport(handler),
+        )
+        response = asyncio.run(client.get_conversation(VIDEO_ID, EVENT_ID, CLIP_ID))
+        self.assertEqual(response.conversation_id, "conv_001")
+        self.assertEqual(response.messages[0].content, "Who won?")
 
 
 class AnalysisGatewayTests(unittest.TestCase):
@@ -75,6 +111,9 @@ class AnalysisGatewayTests(unittest.TestCase):
         expected = AnalysisGatewayResponse(
             answer="This is a scrum phase.",
             provider="mock-rugby-vlm",
+            provider_metadata=ProviderMetadata(id="mock", display_name="Mock VLM"),
+            conversation_id="conv_001",
+            turn_number=1,
             confidence="limited",
             metadata={},
         )
@@ -94,6 +133,24 @@ class AnalysisGatewayTests(unittest.TestCase):
         forwarded = client.analyze.await_args.args[0]
         self.assertEqual(forwarded.event_id, EVENT_ID)
         self.assertEqual(forwarded.question, "Explain this scrum phase")
+
+    def test_get_conversation_forwards_authoritative_event(self) -> None:
+        expected = ConversationHistoryResponse(
+            conversation_id="conv_001",
+            video_id=VIDEO_ID,
+            event_id=EVENT_ID,
+            clip_id=CLIP_ID,
+            messages=[],
+        )
+        client = SimpleNamespace(get_conversation=AsyncMock(return_value=expected))
+        with (
+            patch("app.api.analysis.metadata_service", FakeMetadataService()),
+            patch("app.api.analysis.clip_repository", FakeClipRepository()),
+            patch("app.api.analysis.ai_client", client),
+        ):
+            response = asyncio.run(get_clip_conversation(VIDEO_ID, CLIP_ID))
+        self.assertEqual(response, expected)
+        client.get_conversation.assert_awaited_once_with(VIDEO_ID, EVENT_ID, CLIP_ID)
 
     def test_invalid_clip_returns_404_without_calling_ai_service(self) -> None:
         client = SimpleNamespace(analyze=AsyncMock())

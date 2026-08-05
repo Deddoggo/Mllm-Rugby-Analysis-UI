@@ -72,6 +72,9 @@ export interface AnalysisResponse {
   id: string;
   answer: string;
   model: string;
+  providerLabel?: string;
+  conversationId?: string;
+  turnNumber?: number;
   processingTime?: number;
   createdAt: string;
 }
@@ -82,6 +85,7 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   model?: string;
+  providerLabel?: string;
   processingTime?: number;
 }
 
@@ -167,6 +171,9 @@ export const analysisResponseSchema = z.object({
   id: z.string(),
   answer: z.string(),
   model: z.string(),
+  providerLabel: z.string().optional(),
+  conversationId: z.string().optional(),
+  turnNumber: z.number().int().positive().optional(),
   processingTime: z.number().optional(),
   createdAt: z.string(),
 });
@@ -174,6 +181,31 @@ export const analysisResponseSchema = z.object({
 export const analysisGatewayResponseSchema = z.object({
   answer: z.string().min(1),
   provider: z.string().min(1),
+  provider_metadata: z.object({
+    id: z.string().min(1),
+    display_name: z.string().min(1),
+    model: z.string().nullable().optional(),
+  }).optional(),
+  conversation_id: z.string().nullable().optional(),
+  turn_number: z.number().int().positive().optional(),
   confidence: z.literal("limited"),
   metadata: z.record(z.string(), z.unknown()),
+});
+
+export const conversationHistoryResponseSchema = z.object({
+  conversation_id: z.string(),
+  video_id: z.string().min(1),
+  event_id: z.string().min(1),
+  clip_id: z.string().min(1),
+  messages: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().min(1),
+    provider: z.string().nullable().optional(),
+    provider_metadata: z.object({
+      id: z.string().min(1),
+      display_name: z.string().min(1),
+      model: z.string().nullable().optional(),
+    }).nullable().optional(),
+    created_at: z.string().min(1),
+  })),
 });

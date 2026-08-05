@@ -21,6 +21,7 @@ describe("workspace store", () => {
     eventDetectionStatus: "idle",
     eventDetectionError: null,
     selectedClip: null,
+    clipsByEvent: {},
     clipStatus: "idle",
     clipError: null,
   }));
@@ -110,5 +111,50 @@ describe("workspace store", () => {
 
     expect(useWorkspaceStore.getState().selectedClip).toBeNull();
     expect(useWorkspaceStore.getState().clipStatus).toBe("idle");
+  });
+
+  it("restores clip-scoped conversations without mixing selected events", () => {
+    const secondEvent = { ...event, id: "event_002", label: "Lineout" as const };
+    const firstClip: EventClip = {
+      clipId: "clip_one",
+      videoId: "match_20260803_abcd1234",
+      eventId: event.id,
+      eventLabel: event.label,
+      start: event.start,
+      end: event.end,
+      duration: event.end - event.start,
+      status: "ready",
+      streamUrl: "http://backend.test/clip-one.mp4",
+      extractionProfile: "accurate-h264-v1",
+      createdAt: "2026-08-05T12:00:00Z",
+      cached: true,
+    };
+    const secondClip = {
+      ...firstClip,
+      clipId: "clip_two",
+      eventId: secondEvent.id,
+      eventLabel: secondEvent.label,
+    };
+    useWorkspaceStore.getState().setEvents([event, secondEvent]);
+    useWorkspaceStore.getState().setClipState("ready", firstClip);
+    useWorkspaceStore.getState().addMessages(firstClip.clipId, [{
+      id: "first_message",
+      role: "assistant",
+      content: "First conversation",
+      createdAt: "2026-08-05T12:00:00Z",
+    }]);
+    useWorkspaceStore.getState().selectEvent(secondEvent.id);
+    useWorkspaceStore.getState().setClipState("ready", secondClip);
+    useWorkspaceStore.getState().addMessages(secondClip.clipId, [{
+      id: "second_message",
+      role: "assistant",
+      content: "Second conversation",
+      createdAt: "2026-08-05T12:01:00Z",
+    }]);
+
+    useWorkspaceStore.getState().selectEvent(event.id);
+    expect(useWorkspaceStore.getState().selectedClip?.clipId).toBe("clip_one");
+    expect(useWorkspaceStore.getState().chats.clip_one[0].content).toBe("First conversation");
+    expect(useWorkspaceStore.getState().chats.clip_two[0].content).toBe("Second conversation");
   });
 });

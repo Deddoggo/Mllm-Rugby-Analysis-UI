@@ -12,6 +12,7 @@ interface WorkspaceState {
   eventDetectionStatus: EventDetectionStatus;
   eventDetectionError: string | null;
   selectedClip: EventClip | null;
+  clipsByEvent: Record<string, EventClip>;
   clipStatus: ClipStatus;
   clipError: string | null;
   setEvents: (events: VideoEvent[]) => void;
@@ -21,6 +22,8 @@ interface WorkspaceState {
   replaceEvent: (event: VideoEvent) => void;
   resetBounds: (id: string) => void;
   addMessages: (id: string, messages: ChatMessage[]) => void;
+  setMessages: (id: string, messages: ChatMessage[]) => void;
+  setAvailableClips: (clips: EventClip[]) => void;
   setEventDetection: (status: EventDetectionStatus, error?: string | null) => void;
   setClipState: (status: ClipStatus, clip?: EventClip | null, error?: string | null) => void;
   detectEventsForVideo: (
@@ -38,10 +41,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   eventDetectionStatus: "idle",
   eventDetectionError: null,
   selectedClip: null,
+  clipsByEvent: {},
   clipStatus: "idle",
   clipError: null,
   setEvents: (events) =>
-    set({ events, selectedId: events[0]?.id ?? null, chats: {}, selectedClip: null, clipStatus: "idle", clipError: null }),
+    set({ events, selectedId: events[0]?.id ?? null, chats: {}, selectedClip: null, clipsByEvent: {}, clipStatus: "idle", clipError: null }),
   setCurrentVideo: (currentVideo) =>
     set({
       currentVideo,
@@ -51,64 +55,111 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       eventDetectionStatus: "idle",
       eventDetectionError: null,
       selectedClip: null,
+      clipsByEvent: {},
       clipStatus: "idle",
       clipError: null,
     }),
   selectEvent: (selectedId) => set((state) => ({
     selectedId,
-    selectedClip: state.selectedClip?.eventId === selectedId ? state.selectedClip : null,
-    clipStatus: state.selectedClip?.eventId === selectedId ? state.clipStatus : "idle",
+    selectedClip: state.clipsByEvent[selectedId] ?? null,
+    clipStatus: state.clipsByEvent[selectedId] ? "ready" : "idle",
     clipError: null,
   })),
   updateBounds: (id, start, end) =>
     set((state) => {
-      const stale = state.selectedClip?.eventId === id
-        && (state.selectedClip.start !== start || state.selectedClip.end !== end);
+      const preparedClip = state.clipsByEvent[id];
+      const stale = Boolean(preparedClip
+        && (preparedClip.start !== start || preparedClip.end !== end));
+      const selectedClipStale = stale && state.selectedClip?.eventId === id;
       return {
         events: state.events.map((event) =>
           event.id === id ? { ...event, start, end, adjusted: true } : event,
         ),
-        selectedClip: stale ? null : state.selectedClip,
-        clipStatus: stale ? "idle" : state.clipStatus,
-        clipError: stale ? null : state.clipError,
+        selectedClip: selectedClipStale ? null : state.selectedClip,
+        clipsByEvent: stale
+          ? omitKey(state.clipsByEvent, id)
+          : state.clipsByEvent,
+        clipStatus: selectedClipStale ? "idle" : state.clipStatus,
+        clipError: selectedClipStale ? null : state.clipError,
       };
     }),
   replaceEvent: (updated) =>
     set((state) => {
-      const stale = state.selectedClip?.eventId === updated.id
-        && (state.selectedClip.start !== updated.start || state.selectedClip.end !== updated.end);
+      const preparedClip = state.clipsByEvent[updated.id];
+      const stale = Boolean(preparedClip
+        && (preparedClip.start !== updated.start || preparedClip.end !== updated.end));
+      const selectedClipStale = stale && state.selectedClip?.eventId === updated.id;
       return {
         events: state.events.map((event) => event.id === updated.id ? updated : event),
-        selectedClip: stale ? null : state.selectedClip,
-        clipStatus: stale ? "idle" : state.clipStatus,
-        clipError: stale ? null : state.clipError,
+        selectedClip: selectedClipStale ? null : state.selectedClip,
+        clipsByEvent: stale
+          ? omitKey(state.clipsByEvent, updated.id)
+          : state.clipsByEvent,
+        clipStatus: selectedClipStale ? "idle" : state.clipStatus,
+        clipError: selectedClipStale ? null : state.clipError,
       };
     }),
   resetBounds: (id) =>
     set((state) => {
       const event = state.events.find((item) => item.id === id);
-      const stale = Boolean(event && state.selectedClip?.eventId === id
-        && (state.selectedClip.start !== event.detectedStart
-          || state.selectedClip.end !== event.detectedEnd));
+      const preparedClip = state.clipsByEvent[id];
+      const stale = Boolean(event && preparedClip
+        && (preparedClip.start !== event.detectedStart
+          || preparedClip.end !== event.detectedEnd));
+      const selectedClipStale = stale && state.selectedClip?.eventId === id;
       return {
         events: state.events.map((event) =>
           event.id === id
             ? { ...event, start: event.detectedStart, end: event.detectedEnd, adjusted: false }
             : event,
         ),
-        selectedClip: stale ? null : state.selectedClip,
-        clipStatus: stale ? "idle" : state.clipStatus,
-        clipError: stale ? null : state.clipError,
+        selectedClip: selectedClipStale ? null : state.selectedClip,
+        clipsByEvent: stale
+          ? omitKey(state.clipsByEvent, id)
+          : state.clipsByEvent,
+        clipStatus: selectedClipStale ? "idle" : state.clipStatus,
+        clipError: selectedClipStale ? null : state.clipError,
       };
     }),
   addMessages: (id, messages) =>
     set((state) => ({
       chats: { ...state.chats, [id]: [...(state.chats[id] ?? []), ...messages] },
     })),
+  setMessages: (id, messages) =>
+    set((state) => ({ chats: { ...state.chats, [id]: messages } })),
+  setAvailableClips: (clips) =>
+    set((state) => {
+      const clipsByEvent = clips.reduce<Record<string, EventClip>>((result, clip) => {
+        const event = state.events.find((item) => item.id === clip.eventId);
+        if (
+          event
+          && clip.start === Number(event.start.toFixed(3))
+          && clip.end === Number(event.end.toFixed(3))
+        ) {
+          result[clip.eventId] = clip;
+        }
+        return result;
+      }, { ...state.clipsByEvent });
+      const selectedClip = state.selectedId
+        ? clipsByEvent[state.selectedId] ?? state.selectedClip
+        : state.selectedClip;
+      return {
+        clipsByEvent,
+        selectedClip,
+        clipStatus: selectedClip ? "ready" : state.clipStatus,
+      };
+    }),
   setEventDetection: (eventDetectionStatus, eventDetectionError = null) =>
     set({ eventDetectionStatus, eventDetectionError }),
   setClipState: (clipStatus, selectedClip = null, clipError = null) =>
-    set({ clipStatus, selectedClip, clipError }),
+    set((state) => ({
+      clipStatus,
+      selectedClip,
+      clipError,
+      clipsByEvent: selectedClip
+        ? { ...state.clipsByEvent, [selectedClip.eventId]: selectedClip }
+        : state.clipsByEvent,
+    })),
   detectEventsForVideo: async (videoId, detector) => {
     set({ eventDetectionStatus: "detecting", eventDetectionError: null });
     try {
@@ -120,6 +171,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         eventDetectionStatus: "ready",
         eventDetectionError: null,
         selectedClip: null,
+        clipsByEvent: {},
         clipStatus: "idle",
         clipError: null,
       });
@@ -137,7 +189,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     eventDetectionStatus: "idle",
     eventDetectionError: null,
     selectedClip: null,
+    clipsByEvent: {},
     clipStatus: "idle",
     clipError: null,
   }),
 }));
+
+function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  const next = { ...record };
+  delete next[key];
+  return next;
+}

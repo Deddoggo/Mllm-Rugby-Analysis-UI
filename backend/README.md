@@ -11,6 +11,7 @@ This directory contains the FastAPI service for Rugby Intelligence.
 - `GET /videos/{video_id}/events` predictable event retrieval;
 - `PATCH /videos/{video_id}/events/{event_id}` persisted boundary adjustment;
 - `POST /videos/{video_id}/clips/{clip_id}/analysis` validated AI-service gateway;
+- `GET /videos/{video_id}/clips/{clip_id}/analysis` persisted conversation history;
 - streamed local storage in the repository's `data/videos/` directory;
 - SHA256 duplicate detection with stable video IDs;
 - JSON video metadata in `data/metadata/videos.json`;
@@ -19,8 +20,9 @@ This directory contains the FastAPI service for Rugby Intelligence.
 - atomic JSON event documents in `data/events/{video_id}.json`.
 
 Database persistence and real model inference are deliberately not implemented.
-Event proposals and VLM answers are deterministic mock data; the repositories,
-schemas, gateway, and API contracts are real.
+Event proposals remain deterministic mock data. VLM answers come from the AI
+service's configured mock or Qwen API provider; repositories, schemas, gateway,
+and API contracts are real.
 
 ## Video metadata
 
@@ -165,6 +167,11 @@ uvicorn app.main:app --reload --port 8000
 clip locally, derives the event ID from authoritative clip metadata, and then
 calls `POST /analysis/query`. Connection failures return HTTP 503; missing clips
 return HTTP 404.
+
+The same analysis path supports `GET` to retrieve the selected clip's persisted
+multi-turn conversation. Conversation storage remains owned by the AI service;
+the backend validates authoritative video/clip/event metadata and forwards both
+operations without maintaining a second history store.
 
 Run the AI service separately before asking questions about uploaded clips:
 

@@ -44,7 +44,7 @@ export function ClipPreview({
           <footer>
             <span>{clip.duration.toFixed(1)}s · temporary preview</span>
             <span>Not saved to analysis cache</span>
-            <span>AI Offline · analysis remains mocked</span>
+            <span>Preview only · no VLM request</span>
           </footer>
         </>
       )}

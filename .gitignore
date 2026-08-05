@@ -58,11 +58,13 @@ yarn-error.log*
 # Local data (retain directory placeholders only)
 data/videos/*
 data/clips/*
+data/conversations/*
 data/events/*
 data/metadata/*
 data/processed/*
 !data/videos/.gitkeep
 !data/clips/.gitkeep
+!data/conversations/.gitkeep
 !data/events/.gitkeep
 !data/metadata/.gitkeep
 !data/processed/.gitkeep

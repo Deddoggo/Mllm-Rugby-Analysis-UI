@@ -1,6 +1,7 @@
 """Health, analysis contract, mock VLM, and context recovery tests."""
 
 import json
+import logging
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -8,7 +9,10 @@ from fastapi.testclient import TestClient
 from app.api.analysis import get_analysis_service
 from app.context.builder import ContextBuilder
 from app.main import app
+from app.core.config import settings
 from app.services.analysis_service import AnalysisService
+from app.services.conversation_repository import ConversationRepository
+from app.vlm.interface import VLMRequest
 from app.vlm.mock_vlm import MockVLM
 
 
@@ -69,6 +73,20 @@ def test_health_endpoint() -> None:
     assert response.json() == {"status": "ok", "service": "ai-service"}
 
 
+def test_startup_logs_provider_and_model_without_api_key(caplog) -> None:
+    expected_model = (
+        settings.qwen_model if settings.vlm_provider == "qwen" else "mock-rugby-vlm"
+    )
+    with caplog.at_level(logging.INFO, logger="app.main"):
+        with TestClient(app):
+            pass
+    assert (
+        f"VLM provider={settings.vlm_provider} model={expected_model}" in caplog.text
+    )
+    if settings.qwen_api_key:
+        assert settings.qwen_api_key not in caplog.text
+
+
 def test_analysis_query_endpoint_uses_available_context(tmp_path: Path) -> None:
     events_dir = tmp_path / "events"
     clips_dir = tmp_path / "clips"
@@ -77,6 +95,7 @@ def test_analysis_query_endpoint_uses_available_context(tmp_path: Path) -> None:
     service = AnalysisService(
         vlm=MockVLM(),
         context_builder=ContextBuilder(events_dir, clips_dir, metadata_file),
+        conversation_repository=ConversationRepository(tmp_path / "conversations"),
     )
     app.dependency_overrides[get_analysis_service] = lambda: service
     try:
@@ -87,12 +106,18 @@ def test_analysis_query_endpoint_uses_available_context(tmp_path: Path) -> None:
                 "clip_id": CLIP_ID,
                 "question": "Explain this scrum phase",
             })
+            history_response = client.get(
+                f"/analysis/conversations/{VIDEO_ID}/{EVENT_ID}/{CLIP_ID}"
+            )
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["provider"] == "mock-rugby-vlm"
+    assert payload["provider_metadata"]["display_name"] == "Mock VLM"
+    assert payload["conversation_id"].startswith("conv_")
+    assert payload["turn_number"] == 1
     assert payload["confidence"] == "limited"
     assert payload["answer"].startswith("This is a scrum phase.")
     context = payload["metadata"]["context_used"]
@@ -100,13 +125,18 @@ def test_analysis_query_endpoint_uses_available_context(tmp_path: Path) -> None:
     assert context["event"]["label"] == "Scrum"
     assert context["clip"]["duration"] == 13.0
     assert "path" not in context["clip"]
+    assert history_response.status_code == 200
+    assert [message["role"] for message in history_response.json()["messages"]] == [
+        "user",
+        "assistant",
+    ]
 
 
 def test_mock_vlm_response_is_deterministic_by_event_type() -> None:
     vlm = MockVLM()
     context = {"event": {"label": "Lineout"}, "clip": {"duration": 10}}
-    first = vlm.analyze("ignored.mp4", "What happened?", context)
-    second = vlm.analyze("ignored.mp4", "Use different wording", context)
+    first = vlm.analyze(VLMRequest("ignored.mp4", "What happened?", context))
+    second = vlm.analyze(VLMRequest("ignored.mp4", "Use different wording", context))
     assert first == second
     assert first.startswith("This is a lineout phase.")
 
@@ -135,7 +165,7 @@ def test_missing_and_malformed_context_are_graceful(tmp_path: Path) -> None:
     assert context["clip"] == {}
     assert context["video"] == {}
     assert context["_clip_path"] == ""
-    answer = MockVLM().analyze("", context["question"], context)
+    answer = MockVLM().analyze(VLMRequest("", context["question"], context))
     assert answer.startswith("This is an unclassified phase.")
 
 
@@ -150,12 +180,15 @@ def test_invalid_request_returns_422() -> None:
     assert response.status_code == 422
 
 
-def test_provider_error_returns_500() -> None:
+def test_provider_error_returns_500(tmp_path: Path) -> None:
     class FailingVLM(MockVLM):
-        def analyze(self, clip_path, question, context):
+        def analyze(self, request):
             raise RuntimeError("provider exploded")
 
-    service = AnalysisService(vlm=FailingVLM())
+    service = AnalysisService(
+        vlm=FailingVLM(),
+        conversation_repository=ConversationRepository(tmp_path / "conversations"),
+    )
     app.dependency_overrides[get_analysis_service] = lambda: service
     try:
         with TestClient(app) as client:

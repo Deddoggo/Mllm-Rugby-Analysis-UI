@@ -1,8 +1,6 @@
 """Deterministic placeholder VLM used until real inference is introduced."""
 
-from typing import Any
-
-from app.vlm.interface import VLMInterface
+from app.vlm.interface import VLMInterface, VLMRequest
 
 
 class MockVLM(VLMInterface):
@@ -32,13 +30,7 @@ class MockVLM(VLMInterface):
         ),
     }
 
-    def analyze(
-        self,
-        clip_path: str,
-        question: str,
-        context: dict[str, Any],
-    ) -> str:
-        del clip_path, question  # Real adapters will consume both values.
-        event = context.get("event", {})
+    def analyze(self, request: VLMRequest) -> str:
+        event = request.context.get("event", {})
         label = str(event.get("label", "background")).strip().lower()
         return self._answers.get(label, self._answers["background"])

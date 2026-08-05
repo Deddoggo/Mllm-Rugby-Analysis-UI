@@ -86,8 +86,16 @@ analysis preparation retains its separate `idle`, `extracting`, `ready`, and
 Questions with a prepared persistent `clipId` call
 `POST /videos/{video_id}/clips/{clip_id}/analysis` on the backend. The backend
 validates the clip and forwards it to the independent AI service. Answers remain
-deterministic mock output from `mock-rugby-vlm`; clipless demo questions retain
-the existing frontend mock.
+provider-dependent; clipless demo questions retain the existing frontend mock.
+The matching `GET` endpoint restores prior turns. Real-video chats are keyed by
+persistent clip ID, so changing events or adjusted boundaries cannot mix
+conversation context. Existing cached clips are indexed read-only and never
+created merely by selecting an event.
+
+Provider status is rendered from AI-service response metadata rather than UI
+name mappings. Examples include `Mock VLM` and
+`Qwen API · qwen3.7-flash`; future local providers can supply their own label and
+model without changing visual components.
 
 `components/video/video-player.tsx` supplies the same themed custom controls for
 both match and preview playback: play/pause, real-media seeking, elapsed time,

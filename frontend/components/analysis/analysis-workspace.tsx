@@ -37,6 +37,7 @@ export function AnalysisWorkspace() {
   const chats = useWorkspaceStore((state) => state.chats);
   const eventDetectionStatus = useWorkspaceStore((state) => state.eventDetectionStatus);
   const eventDetectionError = useWorkspaceStore((state) => state.eventDetectionError);
+  const selectedClip = useWorkspaceStore((state) => state.selectedClip);
   const clipStatus = useWorkspaceStore((state) => state.clipStatus);
   const setEvents = useWorkspaceStore((state) => state.setEvents);
   const selectEvent = useWorkspaceStore((state) => state.selectEvent);
@@ -44,6 +45,8 @@ export function AnalysisWorkspace() {
   const replaceEvent = useWorkspaceStore((state) => state.replaceEvent);
   const resetBounds = useWorkspaceStore((state) => state.resetBounds);
   const addMessages = useWorkspaceStore((state) => state.addMessages);
+  const setMessages = useWorkspaceStore((state) => state.setMessages);
+  const setAvailableClips = useWorkspaceStore((state) => state.setAvailableClips);
   const detectEventsForVideo = useWorkspaceStore((state) => state.detectEventsForVideo);
   const setClipState = useWorkspaceStore((state) => state.setClipState);
   const [search, setSearch] = useState("");
@@ -56,6 +59,8 @@ export function AnalysisWorkspace() {
   const [previewOwnerContext, setPreviewOwnerContext] = useState<string | null>(null);
   const previewArtifactRef = useRef<{ videoId: string; previewId: string } | null>(null);
   const previewRequestRef = useRef(0);
+  const indexedClipVideoRef = useRef<string | null>(null);
+  const conversationLoadsRef = useRef(new Map<string, Promise<ChatMessage[]>>());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState("");
@@ -69,6 +74,20 @@ export function AnalysisWorkspace() {
   useEffect(() => {
     if (!currentVideo && query.data) setEvents(query.data);
   }, [currentVideo, query.data, setEvents]);
+
+  useEffect(() => {
+    if (!currentVideo) {
+      indexedClipVideoRef.current = null;
+      return;
+    }
+    if (events.length === 0 || indexedClipVideoRef.current === currentVideo.id) return;
+    indexedClipVideoRef.current = currentVideo.id;
+    void services.clips.listClips(currentVideo.id)
+      .then(setAvailableClips)
+      .catch(() => {
+        indexedClipVideoRef.current = null;
+      });
+  }, [currentVideo, events.length, setAvailableClips]);
 
   const selected = events.find((event) => event.id === selectedId);
   const visibleEvents = useMemo(
@@ -159,6 +178,37 @@ export function AnalysisWorkspace() {
     });
   }, [currentVideo, setClipState]);
 
+  const loadConversation = useCallback((videoId: string, clipId: string) => {
+    const existing = useWorkspaceStore.getState().chats[clipId];
+    if (existing !== undefined) return Promise.resolve(existing);
+    const pending = conversationLoadsRef.current.get(clipId);
+    if (pending) return pending;
+    const request = services.analysis.getConversation(videoId, clipId)
+      .then((messages) => {
+        setMessages(clipId, messages);
+        return messages;
+      })
+      .finally(() => {
+        conversationLoadsRef.current.delete(clipId);
+      });
+    conversationLoadsRef.current.set(clipId, request);
+    return request;
+  }, [setMessages]);
+
+  useEffect(() => {
+    if (!currentVideo || !selectedClip) return;
+    let active = true;
+    void loadConversation(currentVideo.id, selectedClip.clipId)
+      .catch((caught) => {
+        if (active) {
+          setError(caught instanceof Error ? caught.message : "Conversation loading failed.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentVideo, loadConversation, selectedClip]);
+
   const discardPreview = useCallback(async () => {
     const artifact = previewArtifactRef.current;
     previewArtifactRef.current = null;
@@ -235,13 +285,15 @@ export function AnalysisWorkspace() {
     setLastQuestion(question);
     try {
       const clip = currentVideo ? await ensureClip(selected) : null;
+      const conversationKey = clip?.clipId ?? selected.id;
+      if (clip) await loadConversation(currentVideo!.id, clip.clipId);
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
         content: question,
         createdAt: new Date().toISOString(),
       };
-      addMessages(selected.id, [userMessage]);
+      addMessages(conversationKey, [userMessage]);
       const request: AnalysisRequest = {
         videoId: currentVideo?.id ?? "demo-toulouse-asm",
         eventId: selected.id,
@@ -252,12 +304,13 @@ export function AnalysisWorkspace() {
         clipId: clip?.clipId,
       };
       const response = await services.analysis.analyze(request);
-      addMessages(selected.id, [{
+      addMessages(conversationKey, [{
         id: response.id,
         role: "assistant",
         content: response.answer,
         createdAt: response.createdAt,
         model: response.model,
+        providerLabel: response.providerLabel,
         processingTime: response.processingTime,
       }]);
     } catch (caught) {
@@ -265,7 +318,13 @@ export function AnalysisWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [selected, addMessages, currentVideo, ensureClip]);
+  }, [selected, addMessages, currentVideo, ensureClip, loadConversation]);
+
+  const selectedConversationKey = selected
+    ? currentVideo
+      ? selectedClip?.clipId
+      : selected.id
+    : undefined;
 
   return (
     <AppShell search={search} onSearch={setSearch}>
@@ -348,7 +407,7 @@ export function AnalysisWorkspace() {
           )}
           <AnalysisPanel
             selected={selected}
-            messages={selected ? chats[selected.id] ?? [] : []}
+            messages={selectedConversationKey ? chats[selectedConversationKey] ?? [] : []}
             loading={loading}
             preparingClip={clipStatus === "extracting"}
             error={error}

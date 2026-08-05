@@ -40,6 +40,9 @@ export function AnalysisPanel({
   onRetry: () => void;
 }) {
   const [question, setQuestion] = useState("");
+  const providerStatus = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant")?.providerLabel;
 
   const submit = () => {
     if (!selected || !question.trim() || loading) return;
@@ -65,7 +68,7 @@ export function AnalysisPanel({
                 <p>{message.content}</p>
                 {message.model && (
                   <footer>
-                    <span>{message.model}</span>
+                    <span>{message.providerLabel ?? message.model}</span>
                     <span>{message.processingTime} ms</span>
                     <span className="uncertainty"><i /> Interpretive confidence: limited</span>
                     <button aria-label="Copy answer"><Clipboard size={13} /></button>
@@ -75,7 +78,7 @@ export function AnalysisPanel({
               </div>
             </article>
           ))}
-          {loading && <div className="analysis-loading"><span /><span /><span /> {preparingClip ? "Preparing selected clip before mock analysis…" : "Mock analysis is reviewing the prepared clip…"}</div>}
+          {loading && <div className="analysis-loading"><span /><span /><span /> {preparingClip ? "Preparing selected clip for analysis…" : "VLM analysis is reviewing the prepared clip…"}</div>}
           {error && <div className="analysis-error">{error}<button onClick={onRetry}>Try again</button></div>}
         </div>
       )}
@@ -108,7 +111,7 @@ export function AnalysisPanel({
             <button>Rugby knowledge <span className="toggle on" /></button>
             <button>Concise answer <ChevronDown size={13} /></button>
           </div>
-          <span className="mock-label">Mock backend</span>
+          <span className="mock-label">{providerStatus ?? "VLM provider pending"}</span>
           <button className="send-button" onClick={submit} disabled={!selected || !question.trim() || loading} aria-label={loading ? "Analysis in progress" : "Send question"}>
             {loading ? <LoaderCircle className="send-spinner" size={17} /> : <ArrowUp size={18} />}
           </button>
