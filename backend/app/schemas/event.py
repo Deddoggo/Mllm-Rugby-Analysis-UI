@@ -53,6 +53,30 @@ class EventDetectionResponse(EventListResponse):
     created_at: datetime
 
 
+class AIEventProposal(BaseModel):
+    """Event proposal returned by the AI-service detector endpoint."""
+
+    id: str = Field(min_length=1)
+    label: EventLabel
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    confidence: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_boundaries(self) -> "AIEventProposal":
+        if self.end <= self.start:
+            raise ValueError("Event end must be after start.")
+        if self.end - self.start > MAX_EVENT_DURATION_SECONDS:
+            raise ValueError("Event duration cannot exceed 60 seconds.")
+        return self
+
+
+class AIEventDetectionResponse(BaseModel):
+    """Validated transport response from the AI service."""
+
+    events: list[AIEventProposal] = Field(default_factory=list)
+
+
 class EventBoundaryUpdateRequest(BaseModel):
     """Final timeline boundary adjustment submitted after a user gesture."""
 

@@ -1,4 +1,4 @@
-"""Stable detector boundary shared with backend event orchestration."""
+"""Stable detector boundary internal to AI-service inference."""
 
 from typing import Protocol, TypedDict
 

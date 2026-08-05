@@ -11,6 +11,7 @@ from app.schemas.event import (
 )
 from app.services.event_detection import (
     EventDetectionService,
+    EventDetectionUnavailableError,
     InvalidDetectorOutputError,
     VideoNotFoundError,
     VideoNotReadyError,
@@ -27,6 +28,8 @@ def event_http_error(error: Exception) -> HTTPException:
         return HTTPException(status_code=422, detail=str(error))
     if isinstance(error, VideoNotReadyError):
         return HTTPException(status_code=409, detail=str(error))
+    if isinstance(error, EventDetectionUnavailableError):
+        return HTTPException(status_code=503, detail=str(error))
     if isinstance(error, (VideoNotFoundError, EventNotFoundError, ValueError)):
         return HTTPException(status_code=404, detail=str(error))
     return HTTPException(status_code=500, detail="Event data operation failed.")

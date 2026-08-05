@@ -12,5 +12,4 @@ EVENTS_DIR = DATA_DIR / "events"
 CLIPS_DIR = DATA_DIR / "clips"
 METADATA_DIR = DATA_DIR / "metadata"
 VIDEO_METADATA_FILE = METADATA_DIR / "videos.json"
-AI_SERVICE_DIR = REPOSITORY_ROOT / "ai-service"
 AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:8100").rstrip("/")

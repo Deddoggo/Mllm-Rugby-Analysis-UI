@@ -48,7 +48,8 @@ persistence and real AI processing are not implemented yet.
 ### AI service
 
 The `ai-service/` directory separates V-JEPA2, VLM, RAG, and tracking modules.
-Its `vjepa2/` package contains the detector contract and temporary mock. Its
+Its private `vjepa2/` package contains the detector contract and temporary mock,
+exposed to the backend only through `POST /analysis/events/detect`. Its
 FastAPI analysis endpoint assembles video/event/clip context and invokes the
 configured mock or Qwen API provider. It does not load PyTorch or a model
 checkpoint.

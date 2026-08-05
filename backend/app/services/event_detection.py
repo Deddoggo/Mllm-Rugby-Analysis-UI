@@ -1,23 +1,20 @@
-"""Orchestrate processed videos, detector adapters, and event persistence."""
+"""Orchestrate processed videos, AI-service inference, and event persistence."""
 
-import asyncio
 from pathlib import Path
-import sys
 
 from pydantic import ValidationError
 
-from app.core.config import AI_SERVICE_DIR, DATA_DIR, REPOSITORY_ROOT
+from app.core.config import DATA_DIR, REPOSITORY_ROOT
 from app.schemas.event import EventDetectionResponse, EventListResponse, VideoEvent
 from app.schemas.video import VideoMetadata
+from app.services.ai_service_client import (
+    AIServiceResponseError,
+    AIServiceTimeoutError,
+    AIServiceUnavailableError,
+    EventDetectionAIClient,
+)
 from app.services.event_repository import EventRepository
 from app.services.video_metadata import VideoMetadataService
-
-
-if str(AI_SERVICE_DIR) not in sys.path:
-    sys.path.insert(0, str(AI_SERVICE_DIR))
-
-from vjepa2.contracts import EventDetector  # noqa: E402
-from vjepa2.mock_detector import MockVJEPA2Detector  # noqa: E402
 
 
 class VideoNotFoundError(LookupError):
@@ -32,6 +29,10 @@ class InvalidDetectorOutputError(ValueError):
     """Raised when metadata or detector output violates the event contract."""
 
 
+class EventDetectionUnavailableError(RuntimeError):
+    """Raised when the AI-service detector cannot complete a request."""
+
+
 class EventDetectionService:
     """Keep detector details out of API routes and persistence code."""
 
@@ -39,11 +40,11 @@ class EventDetectionService:
         self,
         metadata_service: VideoMetadataService | None = None,
         repository: EventRepository | None = None,
-        detector: EventDetector | None = None,
+        ai_client: EventDetectionAIClient | None = None,
     ) -> None:
         self.metadata_service = metadata_service or VideoMetadataService()
         self.repository = repository or EventRepository()
-        self.detector = detector or MockVJEPA2Detector()
+        self.ai_client = ai_client or EventDetectionAIClient()
 
     async def detect_events(
         self,
@@ -64,17 +65,26 @@ class EventDetectionService:
         if not video_path.is_file():
             raise VideoNotReadyError("Processed video file is unavailable.")
 
-        proposals = await asyncio.to_thread(
-            self.detector.detect_events,
-            str(video_path),
-            video_id,
-            metadata.duration,
-        )
+        try:
+            detection = await self.ai_client.detect_events(
+                metadata.processed_path,
+                video_id,
+            )
+        except AIServiceResponseError as error:
+            raise InvalidDetectorOutputError(str(error)) from error
+        except (AIServiceTimeoutError, AIServiceUnavailableError) as error:
+            raise EventDetectionUnavailableError(str(error)) from error
         try:
             events = [
-                VideoEvent.model_validate(proposal)
-                for proposal in proposals
-                if proposal.get("label") != "Background"
+                VideoEvent.model_validate({
+                    **proposal.model_dump(),
+                    "video_id": video_id,
+                    "detected_start": proposal.start,
+                    "detected_end": proposal.end,
+                    "adjusted": False,
+                })
+                for proposal in detection.events
+                if proposal.label != "Background"
             ]
         except (ValidationError, AttributeError, TypeError) as error:
             raise InvalidDetectorOutputError("Detector returned invalid event proposals.") from error
@@ -88,7 +98,7 @@ class EventDetectionService:
         return self.repository.save_events(
             video_id,
             events,
-            detector=self.detector.name,
+            detector="ai-service",
             status="ready",
         )
 

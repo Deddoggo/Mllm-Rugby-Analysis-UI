@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.analysis import router as analysis_router
+from app.api.events import router as events_router
 from app.core.config import settings
 
 
@@ -30,6 +31,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(analysis_router)
+app.include_router(events_router)
 
 
 @app.get("/health")

@@ -27,6 +27,7 @@ GET  /health
 POST /analysis/query
 GET  /analysis/conversations/{video_id}/{event_id}/{clip_id}
 DELETE /analysis/conversations/{video_id}/{event_id}/{clip_id}
+POST /analysis/events/detect
 ```
 
 Example analysis request:
@@ -204,15 +205,17 @@ answers, context mapping, missing/malformed metadata recovery, provider
 selection, missing credentials, Qwen request formatting, authentication,
 response parsing, and provider failures.
 
-## Existing V-JEPA2 boundary
+## V-JEPA2 service boundary
 
-The top-level `vjepa2/` package remains the stable detector contract currently
-used in process by the backend. `vjepa2/mock_detector.py` continues to provide
-deterministic proposals. This milestone does not move event detection behind the
-AI-service HTTP API and does not add model dependencies.
+The top-level `vjepa2/` package is private to this service and defines the stable
+detector contract. `POST /analysis/events/detect` accepts a shared processed
+video path and video ID, resolves duration from shared metadata, and invokes
+`vjepa2/mock_detector.py`. The backend consumes only the HTTP response and owns
+event persistence.
 
 The future `rugby_linear_head_5_classes` adapter belongs at
 `vjepa2/real_detector.py` behind the existing `EventDetector` contract.
+Replacing the mock requires no backend or frontend code changes.
 
 ## Future architecture
 

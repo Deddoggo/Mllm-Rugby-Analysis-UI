@@ -114,11 +114,11 @@ MP4 files and runtime `clips.json` documents are ignored by Git.
 
 ## Event Data Layer
 
-`EventDetectionService` resolves processed video metadata and delegates proposal
-generation through the `EventDetector` protocol. The current in-process adapter
-is `ai-service/vjepa2/mock_detector.py`. It emits stable Scrum, Lineout, Maul,
-and Goal Kick proposals within the real video duration and never returns
-Background proposals to the timeline.
+`EventDetectionService` resolves processed video metadata, validates the shared
+video path, and calls `POST /analysis/events/detect` on the AI service. Backend
+code never imports detector or model packages. The AI service currently emits
+stable Scrum, Lineout, Maul, and Goal Kick proposals within the real video
+duration and never returns Background proposals to the timeline.
 
 `EventRepository` owns JSON reads, recovery from absent/empty/malformed files,
 atomic temporary-file replacement, and final boundary updates. Detected
@@ -129,7 +129,7 @@ to 60 seconds.
 {
   "video_id": "match_20260803_abcd1234",
   "status": "ready",
-  "detector": "mock-vjepa2",
+  "detector": "ai-service",
   "created_at": "2026-08-03T12:00:00Z",
   "events": [
     {
@@ -147,10 +147,11 @@ to 60 seconds.
 }
 ```
 
-Current orchestration is `Backend -> in-process mock detector`. The future
-deployment boundary is `Backend -> AI service HTTP API -> real V-JEPA2 detector`.
-The `rugby_linear_head_5_classes` integration belongs in
-`ai-service/vjepa2/real_detector.py`, implementing the existing protocol.
+Current orchestration is `Backend -> AI service HTTP API -> mock detector`. The
+future `rugby_linear_head_5_classes` integration belongs in
+`ai-service/vjepa2/real_detector.py`, implementing the existing protocol; the
+backend HTTP client, routes, event repository, and frontend contracts will not
+change.
 
 ## Run locally
 
