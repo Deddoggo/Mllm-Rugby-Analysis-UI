@@ -126,7 +126,9 @@ def test_qwen_video_payload_authentication_and_response_parsing(tmp_path: Path) 
     assert '"duration": 12.5' in text_item["text"]
 
 
-def test_qwen_payload_includes_previous_conversation_turns(tmp_path: Path) -> None:
+def test_qwen_follow_up_sanitizes_history_and_does_not_resend_video(
+    tmp_path: Path,
+) -> None:
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"mock-video-bytes")
     provider = QwenVLM(
@@ -139,16 +141,71 @@ def test_qwen_payload_includes_previous_conversation_turns(tmp_path: Path) -> No
         question="Why?",
         context={"event": {"label": "Scrum"}},
         history=[
-            {"role": "user", "content": "Who won the scrum?"},
-            {"role": "assistant", "content": "The blue team appears to win it."},
+            {
+                "role": "user",
+                "content": "Who won the scrum?",
+                "created_at": "2026-08-05T12:00:00Z",
+            },
+            {
+                "role": "assistant",
+                "content": "The blue team appears to win it.",
+                "provider": "qwen:qwen3.7-flash",
+                "provider_metadata": {"display_name": "Qwen API"},
+            },
+            {"role": "internal", "content": "must not be forwarded"},
         ],
     ))
     assert payload["messages"][1:3] == [
         {"role": "user", "content": "Who won the scrum?"},
         {"role": "assistant", "content": "The blue team appears to win it."},
     ]
-    assert payload["messages"][3]["content"][0]["type"] == "video_url"
-    assert "Why?" in payload["messages"][3]["content"][1]["text"]
+    assert payload["messages"][3] == {"role": "user", "content": "Why?"}
+    assert "video_url" not in json.dumps(payload)
+    assert "provider_metadata" not in json.dumps(payload)
+    assert "created_at" not in json.dumps(payload)
+
+
+def test_qwen_oversized_video_is_not_reencoded_for_follow_up(tmp_path: Path) -> None:
+    clip = tmp_path / "large-clip.mp4"
+    clip.write_bytes(b"0" * (7 * 1024 * 1024 + 1))
+    provider = QwenVLM(
+        api_key="secret-key",
+        model="qwen3.7-plus",
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    )
+    payload = provider.build_payload(VLMRequest(
+        str(clip),
+        "Why?",
+        {},
+        history=[{"role": "assistant", "content": "The first turn succeeded."}],
+    ))
+    assert payload["messages"][-1] == {"role": "user", "content": "Why?"}
+    assert "video_url" not in json.dumps(payload)
+
+
+def test_qwen_debug_log_has_request_shape_without_credentials(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"mock-video-bytes")
+    provider = QwenVLM(
+        api_key="must-not-be-logged",
+        model="qwen3.7-flash",
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    )
+    caplog.set_level("DEBUG", logger="app.vlm.qwen_vlm")
+    provider.build_payload(VLMRequest(
+        str(clip),
+        "Why?",
+        {},
+        history=[{"role": "assistant", "content": "Prior answer"}],
+    ))
+    assert "provider=qwen" in caplog.text
+    assert "model=qwen3.7-flash" in caplog.text
+    assert "has_video=False" in caplog.text
+    assert "history_turns=1" in caplog.text
+    assert "must-not-be-logged" not in caplog.text
 
 
 def test_qwen_http_error_is_wrapped(tmp_path: Path) -> None:
@@ -165,7 +222,10 @@ def test_qwen_http_error_is_wrapped(tmp_path: Path) -> None:
             base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
             client=client,
         )
-        with pytest.raises(VLMAPIError, match="qwen VLM request failed"):
+        with pytest.raises(
+            VLMAPIError,
+            match=r'Qwen request failed: HTTP 503; response=.*"unavailable"',
+        ):
             provider.analyze(VLMRequest(str(clip), "What happened?", {}))
 
 

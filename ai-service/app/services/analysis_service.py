@@ -1,5 +1,7 @@
 """Orchestrate context assembly and the configured VLM adapter."""
 
+import logging
+
 from app.context.builder import ContextBuilder
 from app.schemas.analysis import (
     AnalysisContextUsed,
@@ -11,6 +13,9 @@ from app.schemas.analysis import (
 )
 from app.services.conversation_repository import ConversationRepository
 from app.vlm.interface import VLMInterface, VLMRequest
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AnalysisProviderError(RuntimeError):
@@ -55,6 +60,7 @@ class AnalysisService:
                 history=history,
             ))
         except Exception as error:
+            LOGGER.exception("VLM provider %s failed: %s", self.vlm.name, error)
             raise AnalysisProviderError("VLM provider failed.") from error
         provider_metadata = describe_provider(self.vlm.name)
         conversation = self.conversation_repository.append_turn(

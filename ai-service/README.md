@@ -93,6 +93,12 @@ and supplied through the provider-neutral `VLMRequest.history`. A completed user
 question and assistant answer are then written atomically. Different clips never
 share history, and no database is required for the current milestone.
 
+Qwen sends the base64 `video_url`, structured rugby context, and question on the
+first turn. Later turns send only sanitized user/assistant text history and the
+new question. Provider metadata, timestamps, and other internal fields are not
+forwarded, and the clip video is not uploaded again after the first successful
+turn.
+
 Analysis responses retain the existing answer/provider fields and additionally
 return `provider_metadata`, `conversation_id`, and `turn_number`. Presentation
 metadata such as `Qwen API · qwen3.7-flash` is created by the AI service so
@@ -162,6 +168,11 @@ ordering and endpoint configuration. Local clips up to 7 MB are sent as base64
 inputs to use a public URL; this service currently rejects such clips because it
 does not publish local media. Tests use HTTPX mock transports and never contact
 the external API.
+
+At debug log level, Qwen requests report the provider, model, whether video is
+included, sanitized history length, and local clip size. Credentials and request
+headers are never logged. Provider HTTP failures retain the status and a bounded
+response-body excerpt for server diagnostics without including the API key.
 
 The module launcher starts Uvicorn with reload enabled and reads host/port from
 those settings. Startup logs identify the selected VLM provider and model but

@@ -2,6 +2,7 @@
 
 import base64
 import json
+import logging
 import mimetypes
 from abc import abstractmethod
 from pathlib import Path
@@ -10,6 +11,9 @@ from typing import Any
 import httpx
 
 from app.vlm.interface import VLMInterface, VLMRequest
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 RUGBY_ANALYST_INSTRUCTION = (
@@ -72,7 +76,11 @@ class APIVLM(VLMInterface):
                 )
             response.raise_for_status()
         except httpx.HTTPError as error:
-            raise VLMAPIError(f"{self.provider} VLM request failed.") from error
+            detail = self._http_error_detail(error)
+            LOGGER.error("%s VLM request failed: %s", self.provider, detail)
+            raise VLMAPIError(
+                f"{self.provider.capitalize()} request failed: {detail}"
+            ) from error
         return self._extract_answer(response)
 
     @abstractmethod
@@ -117,6 +125,18 @@ class APIVLM(VLMInterface):
             )
         if not self.base_url:
             raise VLMConfigurationError(f"{self.provider} base URL is required.")
+
+    @staticmethod
+    def _http_error_detail(error: httpx.HTTPError) -> str:
+        """Return useful provider diagnostics without request headers or secrets."""
+        response = getattr(error, "response", None)
+        if response is None:
+            return str(error)
+        body = response.text.strip()
+        if len(body) > 2_000:
+            body = f"{body[:2_000]}…"
+        detail = f"HTTP {response.status_code}"
+        return f"{detail}; response={body}" if body else detail
 
     @staticmethod
     def _extract_answer(response: httpx.Response) -> str:
