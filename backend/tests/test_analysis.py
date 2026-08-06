@@ -1,6 +1,8 @@
 """Backend-to-AI-service client and analysis gateway tests."""
 
 import asyncio
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -53,10 +55,27 @@ class FakeClipRepository:
             video_id=video_id,
             event_id=EVENT_ID,
             clip_id=clip_id,
+            event_label="Scrum",
+            start=42.0,
+            end=55.0,
+            duration=13.0,
+            status="ready",
+            extraction_profile="accurate-h264-v1",
         )
+
+    def resolve_media_path(self, clip) -> Path:
+        return Path(__file__).resolve()
 
 
 class AIServiceClientTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = TemporaryDirectory()
+        self.clip_path = Path(self.temporary.name) / "clip.mp4"
+        self.clip_path.write_bytes(b"prepared-clip")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
     def test_default_timeout_outlasts_qwen_provider_timeout(self) -> None:
         client = AIServiceClient(base_url="http://ai.test")
         self.assertEqual(client.timeout_seconds, DEFAULT_AI_SERVICE_TIMEOUT_SECONDS)
@@ -65,7 +84,13 @@ class AIServiceClientTests(unittest.TestCase):
     def test_mock_ai_service_response_is_typed(self) -> None:
         async def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.path, "/analysis/query")
-            self.assertIn(b'"event_id":"event_001"', request.content)
+            self.assertTrue(request.headers["content-type"].startswith("multipart/form-data;"))
+            self.assertIn(b'name="video"; filename="clip.mp4"', request.content)
+            self.assertIn(b"prepared-clip", request.content)
+            self.assertIn(EVENT_ID.encode(), request.content)
+            self.assertIn(b'name="history"', request.content)
+            self.assertIn(b'name="metadata"', request.content)
+            self.assertIn(b'name="conversation"', request.content)
             return httpx.Response(200, json={
                 "answer": "This is a scrum phase.",
                 "provider": "mock-rugby-vlm",
@@ -84,12 +109,16 @@ class AIServiceClientTests(unittest.TestCase):
             base_url="http://ai.test",
             transport=httpx.MockTransport(handler),
         )
-        response = asyncio.run(client.analyze(AIServiceAnalysisRequest(
-            video_id=VIDEO_ID,
-            event_id=EVENT_ID,
-            clip_id=CLIP_ID,
-            question="Explain this scrum phase",
-        )))
+        response = asyncio.run(client.analyze(
+            AIServiceAnalysisRequest(
+                video_id=VIDEO_ID,
+                event_id=EVENT_ID,
+                clip_id=CLIP_ID,
+                question="Explain this scrum phase",
+            ),
+            self.clip_path,
+            {"event": {"label": "Scrum"}},
+        ))
         self.assertEqual(response.provider, "mock-rugby-vlm")
         self.assertEqual(response.conversation_id, "conv_001")
         self.assertEqual(response.confidence, "limited")
@@ -108,12 +137,16 @@ class AIServiceClientTests(unittest.TestCase):
         )
         with self.assertLogs("app.services.ai_client", level="ERROR") as logs:
             with self.assertRaises(AIServiceProtocolError):
-                asyncio.run(client.analyze(AIServiceAnalysisRequest(
-                    video_id=VIDEO_ID,
-                    event_id=EVENT_ID,
-                    clip_id=CLIP_ID,
-                    question="Explain this scrum phase",
-                )))
+                asyncio.run(client.analyze(
+                    AIServiceAnalysisRequest(
+                        video_id=VIDEO_ID,
+                        event_id=EVENT_ID,
+                        clip_id=CLIP_ID,
+                        question="Explain this scrum phase",
+                    ),
+                    self.clip_path,
+                    {},
+                ))
         self.assertIn("response validation failed", "\n".join(logs.output))
 
     def test_retrieves_conversation_history(self) -> None:

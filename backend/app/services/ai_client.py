@@ -1,6 +1,9 @@
 """Async HTTP client for the independent Rugby Intelligence AI service."""
 
+import json
 import logging
+from pathlib import Path
+from typing import Any
 
 import httpx
 from pydantic import ValidationError
@@ -39,8 +42,37 @@ class AIServiceClient:
         self.timeout_seconds = timeout_seconds
         self.transport = transport
 
-    async def analyze(self, request: AIServiceAnalysisRequest) -> AnalysisGatewayResponse:
-        response = await self._request("POST", "/analysis/query", json=request.model_dump())
+    async def analyze(
+        self,
+        request: AIServiceAnalysisRequest,
+        clip_path: str | Path,
+        metadata: dict[str, Any],
+        history: list[dict[str, str]] | None = None,
+    ) -> AnalysisGatewayResponse:
+        path = Path(clip_path)
+        try:
+            with path.open("rb") as clip_file:
+                response = await self._request(
+                    "POST",
+                    "/analysis/query",
+                    data={
+                        "question": request.question,
+                        "history": json.dumps(history or []),
+                        "metadata": json.dumps(metadata),
+                        "conversation": json.dumps({
+                            "video_id": request.video_id,
+                            "event_id": request.event_id,
+                            "clip_id": request.clip_id,
+                            "mode": request.mode,
+                        }),
+                    },
+                    files={
+                        "video": (path.name, clip_file, "video/mp4"),
+                    },
+                )
+        except OSError as error:
+            LOGGER.exception("Prepared clip is unavailable: clip_id=%s", request.clip_id)
+            raise AIServiceProtocolError("Prepared analysis clip is unavailable.") from error
         return self._validate_response(response, AnalysisGatewayResponse)
 
     async def get_conversation(

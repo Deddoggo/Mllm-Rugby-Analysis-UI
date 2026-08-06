@@ -2,8 +2,10 @@
 
 import json
 import logging
+import base64
 from pathlib import Path
 
+import httpx
 from fastapi.testclient import TestClient
 
 from app.api.analysis import get_analysis_service
@@ -14,11 +16,34 @@ from app.services.analysis_service import AnalysisService
 from app.services.conversation_repository import ConversationRepository
 from app.vlm.interface import VLMRequest
 from app.vlm.mock_vlm import MockVLM
+from app.vlm.qwen_vlm import QwenVLM
 
 
 VIDEO_ID = "match_20260803_abcd1234"
 EVENT_ID = "event_001"
 CLIP_ID = "clip_event_001_abcd1234"
+
+
+def analysis_form(
+    question: str,
+    *,
+    metadata: dict | None = None,
+    history: list[dict[str, str]] | None = None,
+) -> tuple[dict[str, str], dict[str, tuple[str, bytes, str]]]:
+    return (
+        {
+            "question": question,
+            "history": json.dumps(history or []),
+            "metadata": json.dumps(metadata or {}),
+            "conversation": json.dumps({
+                "video_id": VIDEO_ID,
+                "event_id": EVENT_ID,
+                "clip_id": CLIP_ID,
+                "mode": "detailed",
+            }),
+        },
+        {"video": ("clip.mp4", b"uploaded-clip", "video/mp4")},
+    )
 
 
 def write_context(events_dir: Path, clips_dir: Path, metadata_file: Path) -> None:
@@ -104,12 +129,19 @@ def test_analysis_query_endpoint_uses_available_context(tmp_path: Path) -> None:
     app.dependency_overrides[get_analysis_service] = lambda: service
     try:
         with TestClient(app) as client:
-            response = client.post("/analysis/query", json={
-                "video_id": VIDEO_ID,
-                "event_id": EVENT_ID,
-                "clip_id": CLIP_ID,
-                "question": "Explain this scrum phase",
-            })
+            form, files = analysis_form(
+                "Explain this scrum phase",
+                metadata={
+                    "video": {
+                        "video_id": VIDEO_ID,
+                        "filename": "match.mp4",
+                        "duration": 180.0,
+                    },
+                    "event": {"id": EVENT_ID, "label": "Scrum"},
+                    "clip": {"clip_id": CLIP_ID, "duration": 13.0},
+                },
+            )
+            response = client.post("/analysis/query", data=form, files=files)
             history_response = client.get(
                 f"/analysis/conversations/{VIDEO_ID}/{EVENT_ID}/{CLIP_ID}"
             )
@@ -175,12 +207,8 @@ def test_missing_and_malformed_context_are_graceful(tmp_path: Path) -> None:
 
 def test_invalid_request_returns_422() -> None:
     with TestClient(app) as client:
-        response = client.post("/analysis/query", json={
-            "video_id": VIDEO_ID,
-            "event_id": EVENT_ID,
-            "clip_id": CLIP_ID,
-            "question": "",
-        })
+        form, files = analysis_form("")
+        response = client.post("/analysis/query", data=form, files=files)
     assert response.status_code == 422
 
 
@@ -196,13 +224,46 @@ def test_provider_error_returns_500(tmp_path: Path) -> None:
     app.dependency_overrides[get_analysis_service] = lambda: service
     try:
         with TestClient(app) as client:
-            response = client.post("/analysis/query", json={
-                "video_id": VIDEO_ID,
-                "event_id": EVENT_ID,
-                "clip_id": CLIP_ID,
-                "question": "What happened?",
-            })
+            form, files = analysis_form("What happened?")
+            response = client.post("/analysis/query", data=form, files=files)
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 500
     assert response.json()["detail"] == "VLM provider failed."
+
+
+def test_qwen_reads_ai_service_temporary_clip(tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        video_url = payload["messages"][1]["content"][0]["video_url"]["url"]
+        captured["video_bytes"] = base64.b64decode(video_url.split(",", 1)[1])
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "Visible scrum phase."}}],
+        })
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as qwen_client:
+        service = AnalysisService(
+            vlm=QwenVLM(
+                api_key="test-key",
+                model="qwen3.7-flash",
+                base_url="https://qwen.test/compatible-mode/v1",
+                client=qwen_client,
+            ),
+            conversation_repository=ConversationRepository(tmp_path / "conversations"),
+        )
+        app.dependency_overrides[get_analysis_service] = lambda: service
+        try:
+            with TestClient(app) as client:
+                form, files = analysis_form(
+                    "Explain this scrum",
+                    metadata={"event": {"label": "Scrum"}},
+                )
+                files["video"] = ("clip.mp4", b"railway-clip", "video/mp4")
+                response = client.post("/analysis/query", data=form, files=files)
+        finally:
+            app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["video_bytes"] == b"railway-clip"

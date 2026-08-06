@@ -1,6 +1,7 @@
 """Orchestrate context assembly and the configured VLM adapter."""
 
 import logging
+from typing import Any
 
 from app.context.builder import ContextBuilder
 from app.schemas.analysis import (
@@ -36,29 +37,45 @@ class AnalysisService:
         self.conversation_repository = conversation_repository or ConversationRepository()
         self.vlm = vlm
 
-    def analyze(self, request: AnalysisQueryRequest) -> AnalysisQueryResponse:
-        context = self.context_builder.build(
-            request.video_id,
-            request.event_id,
-            request.clip_id,
-            request.question,
-        )
-        clip_path = str(context.pop("_clip_path", ""))
+    def analyze(
+        self,
+        request: AnalysisQueryRequest,
+        *,
+        video_path: str | None = None,
+        context: dict[str, Any] | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> AnalysisQueryResponse:
+        if context is None:
+            analysis_context = self.context_builder.build(
+                request.video_id,
+                request.event_id,
+                request.clip_id,
+                request.question,
+            )
+        else:
+            analysis_context = {
+                "video": context.get("video", {}),
+                "event": context.get("event", {}),
+                "clip": context.get("clip", {}),
+                "question": request.question,
+            }
+        clip_path = video_path or str(analysis_context.pop("_clip_path", ""))
         conversation = self.conversation_repository.get(
             request.video_id,
             request.event_id,
             request.clip_id,
         )
-        history = [
+        persisted_history = [
             {"role": message.role, "content": message.content}
             for message in conversation.messages
         ] if conversation else []
+        effective_history = persisted_history or history or []
         try:
             answer = self.vlm.analyze(VLMRequest(
                 video_path=clip_path,
                 question=request.question,
-                context=context,
-                history=history,
+                context=analysis_context,
+                history=effective_history,
                 mode=request.mode,
             ))
         except Exception as error:
@@ -86,9 +103,9 @@ class AnalysisService:
             confidence="limited",
             metadata=AnalysisMetadata(
                 context_used=AnalysisContextUsed(
-                    video=context.get("video", {}),
-                    event=context.get("event", {}),
-                    clip=context.get("clip", {}),
+                    video=analysis_context.get("video", {}),
+                    event=analysis_context.get("event", {}),
+                    clip=analysis_context.get("clip", {}),
                 ),
             ),
         )

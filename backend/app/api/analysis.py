@@ -1,6 +1,7 @@
 """Validated analysis gateway from persistent clips to the AI service."""
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
@@ -27,6 +28,15 @@ clip_repository = ClipRepository()
 ai_client = AIServiceClient()
 
 
+def _public_model_data(value: object, fields: tuple[str, ...]) -> dict[str, Any]:
+    """Serialize only context fields safe to send across the service boundary."""
+    return {
+        field: item
+        for field in fields
+        if (item := getattr(value, field, None)) is not None
+    }
+
+
 @router.post(
     "/{video_id}/clips/{clip_id}/analysis",
     response_model=AnalysisGatewayResponse,
@@ -51,13 +61,52 @@ async def analyze_clip(
         raise HTTPException(status_code=404, detail="Clip not found.")
 
     try:
-        return await ai_client.analyze(AIServiceAnalysisRequest(
-            video_id=video.video_id,
-            event_id=clip.event_id,
-            clip_id=clip.clip_id,
-            question=request.question,
-            mode=request.mode,
-        ))
+        clip_path = clip_repository.resolve_media_path(clip)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail="Clip not found.") from error
+    if not clip_path.is_file():
+        raise HTTPException(status_code=404, detail="Clip not found.")
+
+    metadata = {
+        "video": _public_model_data(
+            video,
+            ("video_id", "filename", "duration", "size", "status"),
+        ),
+        "event": {
+            "id": clip.event_id,
+            "video_id": video.video_id,
+            "label": getattr(clip, "event_label", "Unknown"),
+            "start": getattr(clip, "start", 0),
+            "end": getattr(clip, "end", 0),
+        },
+        "clip": _public_model_data(
+            clip,
+            (
+                "clip_id",
+                "video_id",
+                "event_id",
+                "event_label",
+                "start",
+                "end",
+                "duration",
+                "status",
+                "extraction_profile",
+            ),
+        ),
+    }
+
+    try:
+        return await ai_client.analyze(
+            AIServiceAnalysisRequest(
+                video_id=video.video_id,
+                event_id=clip.event_id,
+                clip_id=clip.clip_id,
+                question=request.question,
+                mode=request.mode,
+            ),
+            clip_path,
+            metadata,
+        )
     except AIServiceUnavailableError as error:
         LOGGER.exception(
             "Analysis gateway could not reach AI service: video_id=%s clip_id=%s",
